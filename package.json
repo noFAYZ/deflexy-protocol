@@ -1,0 +1,14 @@
+{
+  "name": "deflexy",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "deploy:web": "pnpm --filter @deflexy/sdk build && pnpm --filter @deflexy/web build && npx vercel deploy packages/web --prod --yes"
+  },
+  "devDependencies": {
+    "@iconify/react": "^6.0.2"
+  }
+}

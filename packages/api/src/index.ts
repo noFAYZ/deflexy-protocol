@@ -1,0 +1,169 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+
+if (existsSync(".env")) process.loadEnvFile(".env"); // Node 20.12+ — no dotenv dep needed
+import { cors } from "hono/cors";
+import { sign, verify } from "hono/jwt";
+import { getAddress, isAddress, keccak256, verifyMessage, type Hex } from "viem";
+import { PinataSDK } from "pinata";
+
+const {
+  PINATA_JWT,
+  PINATA_GATEWAY,
+  WEB_ORIGIN = "http://localhost:5173",
+  PORT = "8787",
+} = process.env;
+// `|| default` (not destructuring default) so an empty AUTH_SECRET= line also falls back.
+const AUTH_SECRET = process.env.AUTH_SECRET || "dev-secret-change-me";
+
+if (!PINATA_JWT || !PINATA_GATEWAY) throw new Error("PINATA_JWT and PINATA_GATEWAY are required (see .env.example)");
+
+const pinata = new PinataSDK({ pinataJwt: PINATA_JWT, pinataGateway: PINATA_GATEWAY });
+
+// On-chain we store `ref` = keccak256(content), a neutral 32-byte handle. Pinata is the
+// source of truth: each private file is tagged with its ref, so /access looks the CID up
+// by that tag — no CID<->bytes32 codec juggling. This Map just skips repeat lookups.
+// ponytail: process-local cache; fine for one instance. Pinata list is the real lookup,
+// so multiple instances just each warm their own cache.
+// On-chain `ref` (keccak of content) -> Pinata CID. Persisted to disk because Pinata's
+// keyvalue tags don't reliably round-trip on binary uploads, and the dev server restarts
+// often (tsx watch) — this map is the durable source of truth, written on every upload.
+const REFS_FILE = "data/refs.json";
+function loadRefs(): Map<string, string> {
+  try {
+    return new Map(Object.entries(JSON.parse(readFileSync(REFS_FILE, "utf8")) as Record<string, string>));
+  } catch {
+    return new Map();
+  }
+}
+const cidByRef = loadRefs();
+function persistRefs() {
+  try {
+    mkdirSync("data", { recursive: true });
+    writeFileSync(REFS_FILE, JSON.stringify(Object.fromEntries(cidByRef)));
+  } catch (e) {
+    console.error("persistRefs failed:", e);
+  }
+}
+
+// ref -> parsed brief JSON. Brief content is immutable (content-addressed), so this never
+// goes stale: first reader warms it, everyone after is served from memory.
+// ponytail: unbounded process-local map. Briefs are tiny; add an LRU cap if it ever matters.
+const briefCache = new Map<string, unknown>();
+
+// Mirror this exact string on the frontend — the signature is over it byte-for-byte.
+export function loginMessage(address: string, issued: number, nonce: string) {
+  return `Sign in to Deflexy\nAddress: ${address}\nIssued: ${new Date(issued).toISOString()}\nNonce: ${nonce}`;
+}
+
+const SESSION_TTL = 60 * 60 * 24; // 1 day
+const SIGN_WINDOW = 5 * 60 * 1000; // signed message must be < 5 min old
+
+const app = new Hono();
+app.use("/*", cors({ origin: WEB_ORIGIN, allowHeaders: ["Authorization", "Content-Type"] }));
+
+app.get("/health", (c) => c.json({ ok: true }));
+
+// --- auth: prove control of a wallet, get a short-lived session token ---------
+app.post("/session", async (c) => {
+  const { address, issued, nonce, signature } = await c.req.json();
+  if (!isAddress(address)) return c.json({ error: "bad address" }, 400);
+  if (typeof issued !== "number" || Date.now() - issued > SIGN_WINDOW || issued > Date.now() + 60_000)
+    return c.json({ error: "stale request" }, 400);
+  // ponytail: stateless nonce — a captured signature is replayable for up to SIGN_WINDOW.
+  // Acceptable for an "any signed-in user" gate; add a one-time nonce store to close it.
+  const ok = await verifyMessage({ address, message: loginMessage(address, issued, nonce), signature });
+  if (!ok) return c.json({ error: "bad signature" }, 401);
+  const token = await sign(
+    { sub: getAddress(address), exp: Math.floor(Date.now() / 1000) + SESSION_TTL },
+    AUTH_SECRET,
+    "HS256",
+  );
+  return c.json({ token });
+});
+
+const requireAuth = async (c: any, next: any) => {
+  const header = c.req.header("Authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return c.json({ error: "no token" }, 401);
+  try {
+    await verify(token, AUTH_SECRET, "HS256");
+  } catch {
+    return c.json({ error: "bad token" }, 401);
+  }
+  return next();
+};
+
+// --- private storage ----------------------------------------------------------
+async function pinPrivate(file: File, ref: Hex): Promise<string> {
+  const cached = cidByRef.get(ref);
+  if (cached) return cached;
+  // ponytail: file bytes proxy through this server. Swap to pinata.upload.private
+  // .createSignedURL() for direct browser->Pinata uploads if bandwidth bites.
+  const res = await pinata.upload.private.file(file).keyvalues({ ref });
+  cidByRef.set(ref, res.cid);
+  persistRefs();
+  return res.cid;
+}
+
+async function resolveCid(ref: string): Promise<string | null> {
+  if (cidByRef.has(ref)) return cidByRef.get(ref)!;
+  // Re-read the persisted map (a backfill or another instance may have added it).
+  for (const [k, v] of loadRefs()) if (!cidByRef.has(k)) cidByRef.set(k, v);
+  if (cidByRef.has(ref)) return cidByRef.get(ref)!;
+  // Last resort: Pinata's keyvalue index (only reliable for files that got tagged).
+  const { files } = await pinata.files.private.list().keyvalues({ ref });
+  const cid = files?.[0]?.cid ?? null;
+  if (cid) {
+    cidByRef.set(ref, cid);
+    persistRefs();
+  }
+  return cid;
+}
+
+app.post("/upload/file", requireAuth, async (c) => {
+  const form = await c.req.formData();
+  const file = form.get("file");
+  if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
+  const ref = keccak256(new Uint8Array(await file.arrayBuffer()));
+  await pinPrivate(file, ref);
+  return c.json({ ref });
+});
+
+app.post("/upload/json", requireAuth, async (c) => {
+  const data = await c.req.json();
+  const bytes = new TextEncoder().encode(JSON.stringify(data));
+  const ref = keccak256(bytes);
+  await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref);
+  return c.json({ ref });
+});
+
+// Returns the brief JSON directly (one round trip, no separate gateway fetch) and caches
+// it server-side. Small immutable payload → safe to memoize indefinitely.
+app.post("/brief", requireAuth, async (c) => {
+  const { ref } = await c.req.json();
+  if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
+  if (briefCache.has(ref)) return c.json({ data: briefCache.get(ref) });
+  const cid = await resolveCid(ref);
+  if (!cid) return c.json({ error: "not found" }, 404);
+  const { data } = await pinata.gateways.private.get(cid); // SDK parses application/json
+  briefCache.set(ref, data ?? null);
+  return c.json({ data: data ?? null });
+});
+
+app.post("/access", requireAuth, async (c) => {
+  const { ref, img } = await c.req.json();
+  if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
+  const cid = await resolveCid(ref);
+  if (!cid) return c.json({ error: "not found" }, 404);
+  let link = pinata.gateways.private.createAccessLink({ cid, expires: 120 });
+  // Optimized thumbnails: Pinata resizes/transcodes server-side, so the browser only
+  // downloads a small webp instead of the full original.
+  if (img && (img.width || img.height)) {
+    link = link.optimizeImage({ width: img.width, height: img.height, fit: "scaleDown", format: "auto", quality: 80 });
+  }
+  return c.json({ url: await link });
+});
+
+serve({ fetch: app.fetch, port: Number(PORT) }, (i) => console.log(`@deflexy/api listening on :${i.port}`));

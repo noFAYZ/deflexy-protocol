@@ -1,0 +1,27 @@
+out/
+cache/
+broadcast/
+.env
+.env.local
+.env.*
+!.env.example
+docs/.obsidian/
+
+# build outputs
+dist/
+generated/
+.DS_Store
+
+# claude
+.claude/
+CLAUDE.md
+.mcp.json
+
+lib/
+node_modules
+.ponder
+packages/api/data/
+
+dist
+docs
+FEATURE-GAPS.md

@@ -1,0 +1,7 @@
+{
+  "framework": null,
+  "installCommand": "echo prebuilt",
+  "buildCommand": "echo prebuilt",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
