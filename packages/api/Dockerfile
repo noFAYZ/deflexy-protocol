@@ -5,6 +5,10 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 COPY . .
-# No ENV PORT / EXPOSE — SnapDeploy injects $PORT and the app reads process.env.PORT.
-# data/refs.json is the ref→CID map; on this platform the disk is ephemeral (see DEPLOY.md).
+
+# The platform needs this to know which port to route traffic to.
+# If it injects $PORT at runtime, your app's process.env.PORT will still
+# override this — but the EXPOSE is required to pass deployment validation.
+EXPOSE 3000
+
 CMD ["npm", "run", "start"]
