@@ -6,7 +6,7 @@ COPY package.json ./
 RUN npm install
 COPY . .
 RUN npx ponder codegen
-# No ENV PORT / EXPOSE — SnapDeploy injects $PORT and Ponder reads it.
-# Needs DATABASE_URL (Postgres add-on) and PONDER_RPC_URL_84532 set in the platform env.
+# Ponder listens on 42069 (or $PORT). Needs DATABASE_URL (a DIRECT/unpooled Postgres URL),
+# DATABASE_SCHEMA, and PONDER_RPC_URL_84532 set in the platform env or it crashes on boot.
 EXPOSE 42069
 CMD ["npm", "run", "start"]
