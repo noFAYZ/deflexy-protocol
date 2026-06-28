@@ -20,7 +20,7 @@ export default createConfig({
       // Public RPCs make Ponder throttle conservatively; drpc serves large
       // getLogs ranges, so lift the cap. For production use a dedicated RPC
       // (Alchemy/Infura) via PONDER_RPC_URL_84532.
-      maxRequestsPerSecond: 90,
+      maxRequestsPerSecond: 40,
     },
   },
   contracts: {
