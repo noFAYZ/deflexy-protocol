@@ -9,6 +9,6 @@ COPY . .
 # The platform needs this to know which port to route traffic to.
 # If it injects $PORT at runtime, your app's process.env.PORT will still
 # override this — but the EXPOSE is required to pass deployment validation.
-EXPOSE 3000
+EXPOSE 8787
 
 CMD ["npm", "run", "start"]
