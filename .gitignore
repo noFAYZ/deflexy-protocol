@@ -11,6 +11,7 @@ docs/.obsidian/
 dist/
 generated/
 .DS_Store
+*.zip
 
 # claude
 .claude/
