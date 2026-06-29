@@ -149,6 +149,7 @@ export function JobStepper({ jobId }: { jobId: bigint }) {
           isFreelancer={isFreelancer}
           active={!!active}
           available={avail}
+          disputeClearedAt={agr?.lastDisputeClearedAt ?? 0n}
           invKeys={invKeys}
         />
       ))}
@@ -218,6 +219,7 @@ export function JobStepper({ jobId }: { jobId: bigint }) {
                 agreementId={aid}
                 units={u}
                 max={remaining}
+                model={agr?.model ?? 1}
                 invKeys={invKeys}
               />
             )}

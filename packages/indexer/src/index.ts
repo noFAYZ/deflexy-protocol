@@ -258,29 +258,49 @@ ponder.on("WorkUnitManager:WorkCancelled", async ({ event, context }) => {
 
 // ---------- ReputationRegistry ----------
 
+const ZERO_REP = {
+  completedAsFreelancer: 0n,
+  completedAsEmployer: 0n,
+  volumeAsFreelancer: 0n,
+  disputesAsFreelancer: 0n,
+  disputesLostAsFreelancer: 0n,
+  disputesAsEmployer: 0n,
+  disputesLostAsEmployer: 0n,
+};
+
 ponder.on("ReputationRegistry:SettlementRecorded", async ({ event, context }) => {
   const { employerProfileId, freelancerProfileId, amount } = event.args;
   await context.db
     .insert(schema.reputation)
-    .values({
-      id: freelancerProfileId,
-      completedAsFreelancer: 1n,
-      completedAsEmployer: 0n,
-      volumeAsFreelancer: amount,
-    })
+    .values({ ...ZERO_REP, id: freelancerProfileId, completedAsFreelancer: 1n, volumeAsFreelancer: amount })
     .onConflictDoUpdate((row) => ({
       completedAsFreelancer: row.completedAsFreelancer + 1n,
       volumeAsFreelancer: row.volumeAsFreelancer + amount,
     }));
   await context.db
     .insert(schema.reputation)
-    .values({
-      id: employerProfileId,
-      completedAsFreelancer: 0n,
-      completedAsEmployer: 1n,
-      volumeAsFreelancer: 0n,
-    })
+    .values({ ...ZERO_REP, id: employerProfileId, completedAsEmployer: 1n })
     .onConflictDoUpdate((row) => ({ completedAsEmployer: row.completedAsEmployer + 1n }));
+});
+
+ponder.on("ReputationRegistry:DisputeRecorded", async ({ event, context }) => {
+  const { employerProfileId, freelancerProfileId, outcome } = event.args;
+  const freelancerLost = outcome === 1 ? 1n : 0n; // EmployerPrevails
+  const employerLost = outcome === 2 ? 1n : 0n; // FreelancerPrevails
+  await context.db
+    .insert(schema.reputation)
+    .values({ ...ZERO_REP, id: freelancerProfileId, disputesAsFreelancer: 1n, disputesLostAsFreelancer: freelancerLost })
+    .onConflictDoUpdate((row) => ({
+      disputesAsFreelancer: row.disputesAsFreelancer + 1n,
+      disputesLostAsFreelancer: row.disputesLostAsFreelancer + freelancerLost,
+    }));
+  await context.db
+    .insert(schema.reputation)
+    .values({ ...ZERO_REP, id: employerProfileId, disputesAsEmployer: 1n, disputesLostAsEmployer: employerLost })
+    .onConflictDoUpdate((row) => ({
+      disputesAsEmployer: row.disputesAsEmployer + 1n,
+      disputesLostAsEmployer: row.disputesLostAsEmployer + employerLost,
+    }));
 });
 
 // ---------- DisputeManager ----------
