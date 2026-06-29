@@ -90,7 +90,7 @@ export function JobDetail({ jobId, onBack }: { jobId: bigint; onBack: () => void
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+{/*       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2" onClick={onBack}>
           <Icon icon="solar:arrow-left-linear" /> Back to jobs
         </Button>
@@ -103,11 +103,12 @@ export function JobDetail({ jobId, onBack }: { jobId: bigint; onBack: () => void
       {canApply && job && (
         <BidSheet open={applyOpen} onOpenChange={setApplyOpen} jobId={job.id} profileId={myProfileId!} budget={job.budget} />
       )}
-
+ */}
       {!job ? (
         <p className="text-muted-foreground text-sm">Loading job…</p>
       ) : (
         <>
+        <div className="flex flex-col gap-4 p-4  bg-accent rounded border">
           {/* Title + budget */}
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold tracking-tight">{brief?.title ?? `Job #${job.id.toString()}`}</h2>
@@ -130,7 +131,7 @@ export function JobDetail({ jobId, onBack }: { jobId: bigint; onBack: () => void
                 <Icon icon="solar:calendar-outline" className="size-3" /> {new Date(Number(job.createdAt) * 1000).toLocaleDateString()}
               </Badge>
             )}
-          </div>
+          </div></div>
 
           {/* Brief (clamped, expandable) */}
           <BriefBody brief={brief} loading={briefLoading} />

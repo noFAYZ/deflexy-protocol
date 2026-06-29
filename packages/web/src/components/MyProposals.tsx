@@ -35,10 +35,7 @@ export function MyProposals({ onSelect }: { onSelect: (jobId: bigint) => void })
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">My Proposals</h2>
-        <p className="text-muted-foreground text-xs">{bids ? `${bids.length} submitted` : "Jobs you've bid on"}</p>
-      </div>
+ 
 
       {isLoading || !bids ? (
         <ListSkeleton />

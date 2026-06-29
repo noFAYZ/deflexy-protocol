@@ -21,11 +21,11 @@ export type JobStatus = (typeof JOB_STATUS)[number];
 export type BadgeVariant = NonNullable<BadgeProps["variant"]>;
 
 const STATUS_VARIANTS: Record<JobStatus, BadgeVariant> = {
-  None: "subtle",
-  Open: "lime",
-  Filled: "info",
-  Completed: "purple",
-  Cancelled: "danger",
+  None: "none",
+  Open: "open",
+  Filled: "filled",
+  Completed: "completed",
+  Cancelled: "cancelled",
 };
 
 export function jobStatusVariant(status: number): BadgeVariant {

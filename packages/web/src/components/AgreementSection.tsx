@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AttachmentField, AttachmentLink } from "@/components/Attachment";
 import { useDeflexy, USDC } from "@/deflexy";
-import { useTx, useBatchTx, type Call } from "@/hooks";
+import { useTx, useBatchTx, withUploadToast, type Call } from "@/hooks";
 import { uploadAttachment } from "@/lib/ipfs";
 import { short } from "@/lib/format";
 
@@ -334,7 +334,7 @@ export function AddWorkUnitForm({ agreementId, units, max, model, invKeys, onDon
     if (!deflexy) return;
     const amount = fixed ? max : parseUnits(amt || "0", 6);
     const ok = await tx.run(async () => {
-      const cid = await uploadAttachment(text, file);
+      const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving brief…");
       return deflexy.write.addWorkUnit(agreementId, nextSeq, amount, cid);
     }, invKeys as any, "Work unit added");
     setAmt(fixed ? formatUnits(max, 6) : "");
@@ -406,7 +406,7 @@ export function WorkUnitRow({
     if (!deflexy) return;
     const okTx = await tx.run(
       async () => {
-        const cid = await uploadAttachment(text, file);
+        const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
         return deflexy.write.submitWork(unit.id, cid);
       },
       invKeys as any,
@@ -611,7 +611,7 @@ function DisputeBlock({
       if (!deflexy) return;
       const okTx = await tx.run(
         async () => {
-          const cid = await uploadAttachment(text, file);
+          const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
           return deflexy.write.submitEvidence(dispute!.id, cid);
         },
         keys as any,
@@ -680,7 +680,7 @@ function DisputeBlock({
     if (!deflexy) return;
     const okTx = await tx.run(
       async () => {
-        const cid = await uploadAttachment(text, file);
+        const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
         return deflexy.write.openDispute(agreementId, cid);
       },
       keys as any,

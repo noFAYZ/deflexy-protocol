@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { useDeflexy } from "@/deflexy";
-import { useProfileId, useTx } from "@/hooks";
+import { useProfileId, useTx, withUploadToast } from "@/hooks";
 import { uploadProfileMeta } from "@/lib/ipfs";
 import { type Role } from "@/components/RoleSwitcher";
 import { cn } from "@/lib/utils";
@@ -166,7 +166,7 @@ function ProfileStep({ role, setRole }: { role: Role; setRole: (r: Role) => void
     if (!deflexy || !address || !name.trim()) return;
     let ref: `0x${string}`;
     try {
-      ref = await uploadProfileMeta(name.trim(), "");
+      ref = await withUploadToast(uploadProfileMeta(name.trim(), ""), "Saving profile…");
     } catch (e) {
       tx.setError(e instanceof Error ? e.message : "Upload failed");
       return;

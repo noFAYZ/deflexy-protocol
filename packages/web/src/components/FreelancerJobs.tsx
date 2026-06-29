@@ -53,12 +53,7 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">My Jobs</h2>
-        <p className="text-muted-foreground text-xs">
-          {agreements ? `${activeCount} active · ${completedCount} completed` : "Jobs you've been hired for"}
-        </p>
-      </div>
+   
 
       {isError ? (
         <Empty icon="solar:cloud-cross-outline" text="Indexer offline — your jobs are unavailable." />
@@ -67,7 +62,7 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
       ) : agreements.length === 0 ? (
         <Empty icon="solar:case-minimalistic-outline" text="No accepted jobs yet. Apply to one from Find Jobs." />
       ) : (
-        <div className="border-border bg-card divide-border overflow-hidden rounded-xl border shadow-xs divide-y">
+        <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
           {agreements.map((a) => (
             <AgrRow key={a.id} agr={a} job={jobMap.get(a.jobId)} onSelect={() => onSelect(BigInt(a.jobId))} />
           ))}
@@ -86,6 +81,7 @@ function AgrRow({ agr, job, onSelect }: { agr: Agr; job?: JobItem; onSelect: () 
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-md font-medium">{brief?.title ?? `Job #${agr.jobId}`}</div>
+        {brief?.description && <div className="text-muted-foreground line-clamp-1 text-xs">{brief.description}</div>}
         <div className="mt-1 flex items-center gap-1.5">
           <Badge variant={agrVariant(agr.status)} className="shrink-0">
             {AGR_STATUS[agr.status]}

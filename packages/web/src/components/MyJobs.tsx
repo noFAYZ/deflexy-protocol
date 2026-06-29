@@ -30,19 +30,14 @@ export function MyJobs({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">My Jobs</h2>
-        <p className="text-muted-foreground text-xs">
-          {jobs ? `${open} open · ${jobs.length} total` : "Jobs you've posted"}
-        </p>
-      </div>
+ 
 
       {isLoading || !jobs ? (
         <ListSkeleton />
       ) : jobs.length === 0 ? (
         <Empty icon="solar:shop-outline" text="You haven't posted any jobs yet. Use “Create Job” to start." />
       ) : (
-        <div className="border-border bg-card divide-border overflow-hidden rounded-xl border shadow-xs divide-y">
+        <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
           {jobs.map((j) => (
             <JobRow key={j.id.toString()} job={j} onSelect={() => onSelect(j.id)} />
           ))}
@@ -61,6 +56,7 @@ function JobRow({ job, onSelect }: { job: JobItem; onSelect: () => void }) {
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-md font-medium">{brief?.title ?? (MODELS[job.model] ?? job.model)}</div>
+        {brief?.description && <div className="text-muted-foreground line-clamp-1 text-xs">{brief.description}</div>}
         <div className="mt-1 flex items-center gap-1.5">
           <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
             {JOB_STATUS[job.status]}

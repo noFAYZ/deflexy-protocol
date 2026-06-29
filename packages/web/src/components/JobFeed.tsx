@@ -73,7 +73,7 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 
   const term = search.trim().toLowerCase();
   const rows = open
-    .map((job, i) => ({ job, title: briefs[i]?.data?.title ?? "" }))
+    .map((job, i) => ({ job, title: briefs[i]?.data?.title ?? "", description: briefs[i]?.data?.description ?? "" }))
     .filter(
       ({ job, title }) =>
         !term ||
@@ -114,10 +114,7 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
           </button>
         )}
       </div>
-      <p className="text-muted-foreground px-1 text-xs">
-        {rows.length} open {rows.length === 1 ? "job" : "jobs"}
-        {term && ` matching "${search.trim()}"`}
-      </p>
+
 
       {isLoading ? (
         <div className="space-y-2">
@@ -133,12 +130,13 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
           {term ? "No open jobs match your search." : "No open jobs right now."}
         </div>
       ) : (
-        <div className="border-border bg-card divide-border overflow-hidden rounded-xl border shadow-xs divide-y">
-          {rows.map(({ job, title }) => (
+        <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
+          {rows.map(({ job, title, description }) => (
             <JobRow
               key={job.id.toString()}
               job={job}
               title={title}
+              description={description}
               isOwner={myProfileId !== undefined && job.employerProfileId === myProfileId}
               canceling={tx.busy}
               onSelect={() => onSelect(job.id)}
@@ -154,6 +152,7 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 function JobRow({
   job,
   title,
+  description,
   isOwner,
   canceling,
   onSelect,
@@ -161,6 +160,7 @@ function JobRow({
 }: {
   job: JobItem;
   title: string;
+  description: string;
   isOwner: boolean;
   canceling: boolean;
   onSelect: () => void;
@@ -169,9 +169,10 @@ function JobRow({
   return (
     <div className="hover:bg-accent group flex items-center gap-3 px-3 py-2.5 transition-colors">
       <button onClick={onSelect} className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
-        <span className="truncate text-md font-medium">{title || (MODELS[job.model] ?? job.model)}</span>
+        <span className="w-full truncate text-md font-medium">{title || (MODELS[job.model] ?? job.model)}</span>
+        {description && <span className="text-muted-foreground line-clamp-1 w-full text-xs">{description}</span>}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
+          <Badge variant={jobStatusVariant(job.status)} className="shrink-0"  >
             {JOB_STATUS[job.status]}
           </Badge>
           <Badge variant="subtle" className="shrink-0">
