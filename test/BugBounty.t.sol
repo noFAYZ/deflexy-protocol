@@ -28,7 +28,7 @@ contract BugBountyTest is Base {
         rt.approve(address(vault), type(uint256).max);
 
         vm.prank(employer);
-        uint256 jobId = jobs.createJob(empProfile, address(rt), amount, SettlementModel.FIXED, CID);
+        uint256 jobId = jobs.createJob(empProfile, address(rt), amount, SettlementModel.MILESTONE, CID);
         vm.prank(freelancer);
         uint256 bidId = bidsC.submitBid(jobId, freeProfile, amount, 0, CID);
         vm.prank(employer);
@@ -79,7 +79,7 @@ contract BugBountyTest is Base {
         rt.approve(address(vault), type(uint256).max);
 
         vm.prank(employer);
-        uint256 jobId = jobs.createJob(empProfile, address(rt), 2 * amount, SettlementModel.FIXED, CID);
+        uint256 jobId = jobs.createJob(empProfile, address(rt), 2 * amount, SettlementModel.MILESTONE, CID);
         vm.prank(freelancer);
         uint256 bidId = bidsC.submitBid(jobId, freeProfile, 2 * amount, 0, CID);
         vm.prank(employer);

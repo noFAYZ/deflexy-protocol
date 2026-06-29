@@ -120,8 +120,9 @@ contract DisputeManager is Ownable {
         d.resolvedAt = uint64(block.timestamp);
         openDisputeOf[d.agreementId] = 0;
 
-        // AgreementRegistry validates that the split equals the available escrow.
-        agreements.resolveDispute(d.agreementId, freelancerAmount, employerRefund);
+        // AgreementRegistry validates that the split equals the available escrow
+        // and records the outcome to reputation.
+        agreements.resolveDispute(d.agreementId, outcome, freelancerAmount, employerRefund);
         emit DisputeResolved(disputeId, outcome, freelancerAmount, employerRefund);
     }
 

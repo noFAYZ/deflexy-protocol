@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {AgreementStatus, SettlementModel, JobStatus, BidStatus, WorkUnitStatus} from "./libraries/Types.sol";
+import {AgreementStatus, SettlementModel, JobStatus, BidStatus, WorkUnitStatus, DisputeOutcome} from "./libraries/Types.sol";
 import {Capabilities} from "./libraries/Capabilities.sol";
 import {
     IProfileRegistry,
@@ -96,6 +96,7 @@ contract AgreementRegistry is Ownable {
     error NotActive();
     error NotDisputed();
     error AllocationExceedsTotal();
+    error InvalidFixedAmount();
     error Underfunded();
     error OutstandingUnits();
     error ApprovalWindowNotElapsed();
@@ -207,6 +208,10 @@ contract AgreementRegistry is Ownable {
     {
         Agreement storage a = _active(agreementId);
         _requireEmployer(a, Capabilities.ACCEPT_BID);
+        // FIXED = one deliverable for the whole amount. Combined with the
+        // allocation cap this admits exactly one full-amount unit at a time;
+        // MILESTONE is free to split into partial units.
+        if (a.model == SettlementModel.FIXED && amount != a.totalAmount) revert InvalidFixedAmount();
         if (a.allocated + amount > a.totalAmount) revert AllocationExceedsTotal(); // §5
         workUnitId = workUnits.createWorkUnit(agreementId, sequence, amount, metadataCID);
         a.allocated += amount;
@@ -352,11 +357,15 @@ contract AgreementRegistry is Ownable {
         emit AgreementDisputeDismissed(agreementId);
     }
 
-    /// @dev Resolver must distribute the entire available balance.
-    function resolveDispute(uint256 agreementId, uint256 freelancerAmount, uint256 employerRefund)
-        external
-        onlyDisputeManager
-    {
+    /// @dev Resolver must distribute the entire available balance. The outcome is
+    /// recorded to reputation so habitual losers are visible, independent of the
+    /// monetary split.
+    function resolveDispute(
+        uint256 agreementId,
+        DisputeOutcome outcome,
+        uint256 freelancerAmount,
+        uint256 employerRefund
+    ) external onlyDisputeManager {
         Agreement storage a = _agreements[agreementId];
         if (a.status != AgreementStatus.DISPUTED) revert NotDisputed();
 
@@ -370,6 +379,8 @@ contract AgreementRegistry is Ownable {
         if (employerRefund > 0) {
             vault.refund(a.vaultId, profiles.ownerOf(a.employerProfileId), employerRefund);
         }
+
+        reputation.recordDispute(agreementId, a.employerProfileId, a.freelancerProfileId, outcome);
 
         a.status = AgreementStatus.RESOLVED;
         a.completedAt = uint64(block.timestamp);

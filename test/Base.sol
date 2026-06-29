@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Registry} from "../src/Registry.sol";
 import {ProfileRegistry} from "../src/ProfileRegistry.sol";
 import {JobRegistry} from "../src/JobRegistry.sol";
 import {BidRegistry} from "../src/BidRegistry.sol";
@@ -100,7 +99,9 @@ contract Base {
 
     function _newAgreement(uint256 amount) internal returns (uint256 agreementId) {
         vm.prank(employer);
-        uint256 jobId = jobs.createJob(empProfile, address(token), amount, SettlementModel.FIXED, CID);
+        // MILESTONE by default so helpers can split into partial work units;
+        // FIXED-specific behavior is exercised in Features.t.sol.
+        uint256 jobId = jobs.createJob(empProfile, address(token), amount, SettlementModel.MILESTONE, CID);
         vm.prank(freelancer);
         uint256 bidId = bidsC.submitBid(jobId, freeProfile, amount, 0, CID);
         vm.prank(employer);

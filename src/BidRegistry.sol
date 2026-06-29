@@ -24,7 +24,6 @@ contract BidRegistry is IBidRegistry, Wired {
     );
     event BidWithdrawn(uint256 indexed bidId);
     event BidAccepted(uint256 indexed bidId);
-    event BidRejected(uint256 indexed bidId);
 
     error NotProfileOwner();
     error ProfileNotActive();
@@ -92,13 +91,6 @@ contract BidRegistry is IBidRegistry, Wired {
         if (b.status != BidStatus.SUBMITTED) revert BidNotSubmitted();
         b.status = BidStatus.ACCEPTED;
         emit BidAccepted(bidId);
-    }
-
-    function markRejected(uint256 bidId) external onlyAgreementRegistry {
-        Bid storage b = _bids[bidId];
-        if (b.status != BidStatus.SUBMITTED) revert BidNotSubmitted();
-        b.status = BidStatus.REJECTED;
-        emit BidRejected(bidId);
     }
 
     function getBid(uint256 bidId) external view returns (Bid memory) {
