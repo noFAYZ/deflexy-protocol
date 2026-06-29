@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDeflexy, USDC } from "@/deflexy";
 import { useTx } from "@/hooks";
-import { uploadBrief } from "@/lib/ipfs";
+import { uploadBrief, type UploadPhase } from "@/lib/ipfs";
 import { MODELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,50 @@ const MODEL_META = [
   { icon: "solar:dollar-minimalistic-bold-duotone", desc: "One payment for the whole job." },
   { icon: "solar:checklist-minimalistic-bold-duotone", desc: "Pay in stages as work is approved." },
 ];
+
+const PHASE_ORDER = ["files", "brief", "tx"] as const;
+type Phase = (typeof PHASE_ORDER)[number];
+
+/** Live checklist shown while a job is being submitted: attachment upload → brief
+ * pinning → on-chain tx, each ticking from spinner to check. Private pinning is
+ * a few seconds, so showing the real stage beats one opaque spinner. */
+function SubmitProgress({ phase, hasFile }: { phase: Phase; hasFile: boolean }) {
+  const idx = PHASE_ORDER.indexOf(phase);
+  const steps = [
+    ...(hasFile ? [{ key: "files" as const, label: "Uploading attachment" }] : []),
+    { key: "brief" as const, label: "Storing brief privately" },
+    { key: "tx" as const, label: "Creating job on-chain" },
+  ];
+  return (
+    <div className="bg-muted/40 mt-4 space-y-2 rounded-lg border p-3">
+      {steps.map((s) => {
+        const sIdx = PHASE_ORDER.indexOf(s.key);
+        const done = idx > sIdx;
+        const active = idx === sIdx;
+        return (
+          <div key={s.key} className="flex items-center gap-2.5 text-sm">
+            <span
+              className={cn(
+                "flex size-5 shrink-0 items-center justify-center rounded-full",
+                done ? "bg-lime-600 text-white" : active ? "text-lime-600" : "text-muted-foreground/40",
+              )}
+            >
+              {done ? (
+                <Icon icon="solar:check-read-linear" className="size-3.5" />
+              ) : active ? (
+                <Icon icon="solar:refresh-linear" className="size-3.5 animate-spin" />
+              ) : (
+                <span className="size-1.5 rounded-full bg-current" />
+              )}
+            </span>
+            <span className={cn(done && "text-muted-foreground line-through", active && "font-medium")}>{s.label}</span>
+          </div>
+        );
+      })}
+      <p className="text-muted-foreground pt-0.5 text-xs">Private storage can take a few seconds — keep this open.</p>
+    </div>
+  );
+}
 
 export function CreateJobDialog() {
   const { address } = useAccount();
@@ -35,6 +79,8 @@ export function CreateJobDialog() {
   const [desc, setDesc] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  // null when idle; otherwise the current submit stage for the progress checklist.
+  const [phase, setPhase] = useState<UploadPhase | "tx" | null>(null);
 
   const { data: profileId } = useQuery({
     queryKey: ["profile", address],
@@ -52,6 +98,7 @@ export function CreateJobDialog() {
     setOpen(v);
     if (v) {
       setStep(0);
+      setPhase(null);
       tx.setError("");
     }
   }
@@ -62,21 +109,24 @@ export function CreateJobDialog() {
     setUploading(true);
     try {
       // Brief → private Pinata storage (prompts a wallet sign-in on first use).
-      const r = await uploadBrief(title.trim(), desc, file ? [file] : []);
+      const r = await uploadBrief(title.trim(), desc, file ? [file] : [], setPhase);
       ref = r.ref;
       // Prime the cache so the feed/detail render the title immediately, no refetch.
       queryClient.setQueryData(["brief", r.ref], r.brief);
     } catch (err) {
       tx.setError(err instanceof Error ? err.message : "Brief upload failed");
+      setPhase(null);
       return;
     } finally {
       setUploading(false);
     }
+    setPhase("tx");
     const ok = await tx.run(
       () => deflexy.write.createJob(profileId, USDC, parseUnits(budget, 6), model, ref),
       [["jobs"]],
       "Job created",
     );
+    setPhase(null);
     if (ok) {
       setTitle("");
       setDesc("");
@@ -305,6 +355,8 @@ export function CreateJobDialog() {
 
               {tx.error && <p className="text-destructive text-sm">{tx.error}</p>}
             </div>
+
+            {phase && <SubmitProgress phase={phase} hasFile={!!file} />}
 
             {/* Nav */}
             <div className="mt-6 flex gap-2">

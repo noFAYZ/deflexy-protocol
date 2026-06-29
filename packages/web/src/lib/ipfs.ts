@@ -138,16 +138,26 @@ export interface Brief {
   ts: number;
 }
 
+/** Coarse phases for upload progress UI. */
+export type UploadPhase = "files" | "brief";
+
 /** Title + description + files → private brief envelope. Returns the on-chain ref and the
- * brief object itself, so the caller can prime the react-query cache without a refetch. */
+ * brief object itself, so the caller can prime the react-query cache without a refetch.
+ * `onPhase` fires as each (slow) stage begins so the UI can show real progress. */
 export async function uploadBrief(
   title: string,
   description: string,
   files: File[],
+  onPhase?: (p: UploadPhase) => void,
 ): Promise<{ ref: Hex; brief: Brief }> {
-  const attachments = await Promise.all(
-    files.map(async (f) => ({ ref: await uploadFile(f), name: f.name, mime: f.type })),
-  );
+  let attachments: Brief["attachments"] = [];
+  if (files.length) {
+    onPhase?.("files");
+    attachments = await Promise.all(
+      files.map(async (f) => ({ ref: await uploadFile(f), name: f.name, mime: f.type })),
+    );
+  }
+  onPhase?.("brief");
   const brief: Brief = { v: 1, title, description, attachments, ts: Date.now() };
   const ref = await uploadJson(brief);
   return { ref, brief };
