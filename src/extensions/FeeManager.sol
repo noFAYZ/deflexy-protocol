@@ -52,6 +52,13 @@ contract FeeManager is IFeeManager, Ownable {
         treasury = c.treasury;
     }
 
+    /// @inheritdoc IFeeManager
+    function policy(address token) external view returns (uint16 feeBps, address treasury) {
+        Config memory c = _config[token];
+        if (!c.enabled) return (0, address(0));
+        return (c.feeBps, c.treasury);
+    }
+
     function getConfig(address token) external view returns (Config memory) {
         return _config[token];
     }

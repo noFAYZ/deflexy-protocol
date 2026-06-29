@@ -53,7 +53,7 @@ contract PermissionManager is IPermissionManager {
     {
         if (capability == 0) return false;
         Grant storage g = _grants[profileId][account];
-        if (g.expiration != 0 && block.timestamp > g.expiration) return false;
+        if (g.expiration != 0 && block.timestamp >= g.expiration) return false;
         return (g.mask & capability) == capability;
     }
 

@@ -11,9 +11,10 @@ library Capabilities {
     uint256 internal constant FUND_VAULT = 1 << 4;
     uint256 internal constant SUBMIT_WORK = 1 << 5;
     uint256 internal constant APPROVE_WORK = 1 << 6;
-    uint256 internal constant OPEN_DISPUTE = 1 << 7;
-    uint256 internal constant MANAGE_PROFILE = 1 << 8;
+    // Dropped OPEN_DISPUTE / MANAGE_PROFILE: no code consulted them, so granting
+    // them was a no-op that misled delegators. Re-add (and wire) if delegated
+    // dispute-opening / profile management is ever actually implemented.
 
     /// @dev All defined bits — any grant mask must be a subset of this.
-    uint256 internal constant ALL = (1 << 9) - 1;
+    uint256 internal constant ALL = (1 << 7) - 1;
 }

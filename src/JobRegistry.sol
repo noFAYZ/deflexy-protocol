@@ -35,6 +35,7 @@ contract JobRegistry is IJobRegistry, Wired {
     error ProfileNotActive();
     error JobNotFound();
     error JobNotOpen();
+    error JobNotFilled();
     error InvalidBudget();
     error InvalidToken();
     error AlreadySet();
@@ -100,9 +101,18 @@ contract JobRegistry is IJobRegistry, Wired {
 
     function markCompleted(uint256 jobId) external onlyAgreementRegistry {
         Job storage j = _jobs[jobId];
-        if (j.status != JobStatus.FILLED) revert JobNotFound();
+        if (j.status != JobStatus.FILLED) revert JobNotFilled();
         j.status = JobStatus.COMPLETED;
         emit JobCompleted(jobId);
+    }
+
+    /// @dev Agreement terminated mid-life — release the job from FILLED so it
+    /// isn't stranded for indexers (§L4). Terminal: not re-openable.
+    function markCancelled(uint256 jobId) external onlyAgreementRegistry {
+        Job storage j = _jobs[jobId];
+        if (j.status != JobStatus.FILLED) revert JobNotFilled();
+        j.status = JobStatus.CANCELLED;
+        emit JobCancelled(jobId);
     }
 
     function getJob(uint256 jobId) external view returns (Job memory) {

@@ -22,6 +22,7 @@ contract WorkUnitManager is IWorkUnitManager, Wired {
     event RevisionRequested(uint256 indexed id);
     event WorkApproved(uint256 indexed id);
     event WorkSettled(uint256 indexed id);
+    event WorkCancelled(uint256 indexed id);
 
     error WorkUnitNotFound();
     error InvalidAmount();
@@ -88,6 +89,19 @@ contract WorkUnitManager is IWorkUnitManager, Wired {
         if (u.status != WorkUnitStatus.APPROVED) revert InvalidState();
         u.status = WorkUnitStatus.SETTLED;
         emit WorkSettled(id);
+    }
+
+    /// @dev Employer escape (§7-symmetric): voids a unit the freelancer never
+    /// carried to APPROVED. The AgreementRegistry enforces the timeout and frees
+    /// the allocation; here we only gate the valid source states.
+    function setCancelled(uint256 id) external onlyAgreementRegistry {
+        WorkUnit storage u = _load(id);
+        if (
+            u.status != WorkUnitStatus.CREATED && u.status != WorkUnitStatus.IN_PROGRESS
+                && u.status != WorkUnitStatus.REVISION_REQUESTED
+        ) revert InvalidState();
+        u.status = WorkUnitStatus.CANCELLED;
+        emit WorkCancelled(id);
     }
 
     function getWorkUnit(uint256 id) external view returns (WorkUnit memory) {

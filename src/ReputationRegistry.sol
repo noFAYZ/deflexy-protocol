@@ -29,11 +29,11 @@ contract ReputationRegistry is IReputationRegistry, Wired {
         uint256 freelancerProfileId,
         uint256 amount
     ) external onlyAgreementRegistry {
-        unchecked {
-            completedAsFreelancer[freelancerProfileId] += 1;
-            completedAsEmployer[employerProfileId] += 1;
-            volumeAsFreelancer[freelancerProfileId] += amount;
-        }
+        // Checked arithmetic: a wrapped volume/count would read as legitimate to
+        // indexers. The gas delta is negligible for once-per-settlement writes.
+        completedAsFreelancer[freelancerProfileId] += 1;
+        completedAsEmployer[employerProfileId] += 1;
+        volumeAsFreelancer[freelancerProfileId] += amount;
         emit SettlementRecorded(agreementId, employerProfileId, freelancerProfileId, amount);
     }
 }

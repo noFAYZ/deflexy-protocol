@@ -8,6 +8,7 @@ import {ProfileRegistry} from "../src/ProfileRegistry.sol";
 import {JobRegistry} from "../src/JobRegistry.sol";
 import {BidRegistry} from "../src/BidRegistry.sol";
 import {WorkUnitManager} from "../src/WorkUnitManager.sol";
+import {FeeManager} from "../src/extensions/FeeManager.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {SettlementModel} from "../src/libraries/Types.sol";
 
@@ -19,8 +20,10 @@ contract Handler {
     AgreementRegistry public agreement;
     VaultManager public vault;
     MockERC20 public token;
+    FeeManager public fee;
     address public employer;
     address public freelancer;
+    address public treasuryAddr;
 
     uint256 public aid;
     uint256 public vaultId;
@@ -32,8 +35,10 @@ contract Handler {
         AgreementRegistry _agreement,
         VaultManager _vault,
         MockERC20 _token,
+        FeeManager _fee,
         address _employer,
         address _freelancer,
+        address _treasury,
         uint256 _aid,
         uint256 _vaultId,
         uint256 _total
@@ -41,8 +46,10 @@ contract Handler {
         agreement = _agreement;
         vault = _vault;
         token = _token;
+        fee = _fee;
         employer = _employer;
         freelancer = _freelancer;
+        treasuryAddr = _treasury;
         aid = _aid;
         vaultId = _vaultId;
         total = _total;
@@ -74,6 +81,29 @@ contract Handler {
         agreement.settleWorkUnit(wu);
     }
 
+    /// @dev Exercise the M1 cancel path: allocate a unit, let it go stale, and
+    /// reclaim the allocation. Must never move tokens or break solvency.
+    function addStaleAndCancel(uint256 amt) external {
+        uint256 rem = total - allocated;
+        if (rem == 0) return;
+        amt = 1 + (amt % rem);
+        vm.prank(employer);
+        uint256 wu = agreement.addWorkUnit(aid, ++seq, amt, bytes32(0));
+        allocated += amt;
+
+        vm.warp(block.timestamp + 14 days + 1);
+        vm.prank(employer);
+        agreement.cancelWorkUnit(wu);
+        allocated -= amt; // contract frees it; mirror locally
+    }
+
+    /// @dev Churn the fee policy. The vault snapshotted its fee at creation, so
+    /// this must not change any in-flight settlement (M3) — solvency still holds.
+    function churnFee(uint16 bps) external {
+        bps = uint16(bps % 1001);
+        fee.setFeeConfig(address(token), bps, treasuryAddr, true);
+    }
+
     function withdrawFreelancer() external {
         if (vault.claimable(freelancer, address(token)) == 0) return;
         vm.prank(freelancer);
@@ -93,6 +123,10 @@ contract InvariantTest is Base {
         uint256 total = 1_000 * AMOUNT;
         token.mint(employer, total); // headroom for the agreement
 
+        // Non-zero fee at creation so the snapshot/fee path is under test; the
+        // solvency sum below already accounts for the treasury's claimable.
+        fee.setFeeConfig(address(token), 250, treasury, true);
+
         vm.prank(employer);
         uint256 jobId = jobs.createJob(empProfile, address(token), total, SettlementModel.FIXED, CID);
         vm.prank(freelancer);
@@ -101,7 +135,8 @@ contract InvariantTest is Base {
         uint256 aid = agreement.createAgreement(jobId, bidId);
         uint256 vaultId = agreement.getAgreement(aid).vaultId;
 
-        handler = new Handler(agreement, vault, token, employer, freelancer, aid, vaultId, total);
+        handler = new Handler(agreement, vault, token, fee, employer, freelancer, treasury, aid, vaultId, total);
+        fee.transferOwnership(address(handler)); // let churnFee mutate the policy
     }
 
     /// @dev Restrict the invariant fuzzer to the handler (no forge-std needed).
@@ -112,9 +147,12 @@ contract InvariantTest is Base {
 
     function invariant_solvency() public view {
         uint256 held = token.balanceOf(address(vault));
-        uint256 owed = vault.available(handler.vaultId())
+        uint256 owedSum = vault.available(handler.vaultId())
             + vault.claimable(freelancer, address(token)) + vault.claimable(employer, address(token))
             + vault.claimable(treasury, address(token));
-        _assert(held == owed, "VaultManager insolvent");
+        _assert(held == owedSum, "VaultManager insolvent");
+        // The O(1) `owed` accumulator that backs sweep() must never drift from
+        // the true obligation sum, or sweep could give away user funds.
+        _assert(vault.owed(address(token)) == owedSum, "owed accumulator drift");
     }
 }
