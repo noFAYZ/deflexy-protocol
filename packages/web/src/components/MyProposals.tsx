@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits, type Hex } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useBrief, useProfileId } from "@/hooks";
 
@@ -62,21 +63,21 @@ function ProposalRow({ bid, onSelect }: { bid: Bid; onSelect: () => void }) {
   const { data: brief } = useBrief(job?.metadataCID as Hex | undefined);
 
   return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-surface/70 group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{brief?.title ?? `Job #${bid.jobId}`}</div>
-        <div className="mt-1">
+    <JobListRow
+      title={brief?.title ?? `Job #${bid.jobId}`}
+      description={brief?.description}
+      onSelect={onSelect}
+      badges={
+        <>
           <Badge variant={bidVariant(bid.status)} className="shrink-0">
             {BID_STATUS[bid.status]}
           </Badge>
-        </div>
-      </div>
-      <span className="font-mono text-sm font-medium">{formatUnits(bid.amount, 6)} USDC</span>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
+          <Badge variant="secondary" className="shrink-0 font-mono">
+            {formatUnits(bid.amount, 6)} USDC
+          </Badge>
+        </>
+      }
+    />
   );
 }
 

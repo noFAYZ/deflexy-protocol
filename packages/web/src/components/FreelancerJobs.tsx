@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useBrief, useProfileId } from "@/hooks";
-import { MODELS, timeAgo, type JobItem } from "@/lib/format";
+import { MODELS, type JobItem } from "@/lib/format";
 
 const AGR_STATUS = ["None", "Active", "Disputed", "Resolved", "Completed", "Terminated"];
 const agrVariant = (s: number): "success" | "info" | "warning" | "danger" | "secondary" =>
@@ -75,17 +76,13 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
 function AgrRow({ agr, job, onSelect }: { agr: Agr; job?: JobItem; onSelect: () => void }) {
   const { data: brief } = useBrief(job?.metadataCID);
   return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-accent group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <div className="min-w-0 flex-1 truncate text-md font-medium">{brief?.title ?? `Job #${agr.jobId}`}</div>
-          {job && <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{timeAgo(job.createdAt)}</span>}
-        </div>
-        {brief?.description && <div className="text-muted-foreground line-clamp-1 text-xs">{brief.description}</div>}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+    <JobListRow
+      title={brief?.title ?? `Job #${agr.jobId}`}
+      timestamp={job?.createdAt}
+      description={brief?.description}
+      onSelect={onSelect}
+      badges={
+        <>
           <Badge variant={agrVariant(agr.status)} className="shrink-0">
             {AGR_STATUS[agr.status]}
           </Badge>
@@ -95,10 +92,9 @@ function AgrRow({ agr, job, onSelect }: { agr: Agr; job?: JobItem; onSelect: () 
           <Badge variant="secondary" className="shrink-0 font-mono">
             {formatUnits(BigInt(agr.totalAmount), 6)} USDC
           </Badge>
-        </div>
-      </div>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
+        </>
+      }
+    />
   );
 }
 

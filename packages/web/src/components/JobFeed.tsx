@@ -4,10 +4,11 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { formatUnits, type Address, type Hex } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useEmployerStats } from "@/hooks";
 import { fetchBrief, isEmptyCid } from "@/lib/ipfs";
-import { JOB_STATUS, MODELS, jobStatusVariant, timeAgo, type JobItem } from "@/lib/format";
+import { JOB_STATUS, MODELS, jobStatusVariant, type JobItem } from "@/lib/format";
 
 interface IndexerJob {
   id: string;
@@ -121,57 +122,31 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
       ) : (
         <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
           {rows.map(({ job, title, description }) => (
-            <JobRow
+            <JobListRow
               key={job.id.toString()}
-              job={job}
-              title={title}
+              title={title || (MODELS[job.model] ?? String(job.model))}
+              timestamp={job.createdAt}
               description={description}
               onSelect={() => onSelect(job.id)}
+              badges={
+                <>
+                  <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
+                    {JOB_STATUS[job.status]}
+                  </Badge>
+                  <Badge variant="subtle" className="shrink-0">
+                    {MODELS[job.model] ?? job.model}
+                  </Badge>
+                  <Badge variant="secondary" className="shrink-0 font-mono">
+                    {formatUnits(job.budget, 6)} USDC
+                  </Badge>
+                  <EmployerBadges profileId={job.employerProfileId} />
+                </>
+              }
             />
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-function JobRow({
-  job,
-  title,
-  description,
-  onSelect,
-}: {
-  job: JobItem;
-  title: string;
-  description: string;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-accent group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
-    >
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <div className="flex w-full items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-md font-medium">{title || (MODELS[job.model] ?? job.model)}</span>
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{timeAgo(job.createdAt)}</span>
-        </div>
-        {description && <span className="text-muted-foreground line-clamp-1 w-full text-xs">{description}</span>}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
-            {JOB_STATUS[job.status]}
-          </Badge>
-          <Badge variant="subtle" className="shrink-0">
-            {MODELS[job.model] ?? job.model}
-          </Badge>
-          <Badge variant="secondary" className="shrink-0 font-mono">
-            {formatUnits(job.budget, 6)} USDC
-          </Badge>
-          <EmployerBadges profileId={job.employerProfileId} />
-        </div>
-      </div>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
   );
 }
 

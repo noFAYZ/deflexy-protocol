@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useBrief, useProfileId } from "@/hooks";
-import { JOB_STATUS, MODELS, jobStatusVariant, timeAgo, type JobItem } from "@/lib/format";
+import { JOB_STATUS, MODELS, jobStatusVariant, type JobItem } from "@/lib/format";
 
 /** Buyer/client view: jobs you've posted. */
 export function MyJobs({ onSelect }: { onSelect: (jobId: bigint) => void }) {
@@ -50,17 +51,13 @@ export function MyJobs({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 function JobRow({ job, onSelect }: { job: JobItem; onSelect: () => void }) {
   const { data: brief } = useBrief(job.metadataCID);
   return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-accent group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <div className="min-w-0 flex-1 truncate text-md font-medium">{brief?.title ?? (MODELS[job.model] ?? job.model)}</div>
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{timeAgo(job.createdAt)}</span>
-        </div>
-        {brief?.description && <div className="text-muted-foreground line-clamp-1 text-xs">{brief.description}</div>}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+    <JobListRow
+      title={brief?.title ?? (MODELS[job.model] ?? String(job.model))}
+      timestamp={job.createdAt}
+      description={brief?.description}
+      onSelect={onSelect}
+      badges={
+        <>
           <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
             {JOB_STATUS[job.status]}
           </Badge>
@@ -70,10 +67,9 @@ function JobRow({ job, onSelect }: { job: JobItem; onSelect: () => void }) {
           <Badge variant="secondary" className="shrink-0 font-mono">
             {formatUnits(job.budget, 6)} USDC
           </Badge>
-        </div>
-      </div>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
+        </>
+      }
+    />
   );
 }
 
