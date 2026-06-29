@@ -8,6 +8,9 @@ Decentralized freelancing protocol — on-chain agreements, escrow, and reputati
 - **Contracts:** `src/` — Foundry project (OpenZeppelin, fetched into `lib/`).
 - **Indexer:** `packages/indexer/` — Ponder app indexing the protocol events.
 - **SDK:** `packages/sdk/` — TypeScript/viem SDK ([README](packages/sdk/README.md)).
+- **API:** `packages/api/` — Hono server: wallet sign-in (SIWE → JWT) and
+  content-addressed off-chain storage (Pinata/IPFS). On-chain objects store a
+  `keccak256(content)` ref; this service holds the actual bytes.
 - **Web app:** `packages/web/` — React + wagmi dApp (connect wallet, create jobs).
 - **Live deployment:** Base Sepolia — [`deployments/base-sepolia.md`](deployments/base-sepolia.md).
 
@@ -42,7 +45,9 @@ pnpm install
 # 1) indexer (serves GraphQL on :42069)
 pnpm --filter @deflexy/indexer exec ponder codegen
 DATABASE_SCHEMA=deflexy pnpm --filter @deflexy/indexer exec ponder start
-# 2) build the SDK, then start the web app (:5173)
+# 2) api (serves storage + auth on :8787; needs PINATA_JWT, PINATA_GATEWAY)
+pnpm --filter @deflexy/api dev
+# 3) build the SDK, then start the web app (:5173)
 pnpm --filter @deflexy/sdk build
 pnpm --filter @deflexy/web dev
 ```

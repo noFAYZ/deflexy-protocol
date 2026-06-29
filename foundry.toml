@@ -14,7 +14,7 @@ evm_version = "cancun"
 
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
-base_sepolia = "https://84532.rpc.thirdweb.com"
+base_sepolia = "https://base-sepolia.g.alchemy.com/v2/EdzxLIqGZZycgUrfb6ea7"
 anvil = "http://127.0.0.1:8545"
 
 [etherscan]
