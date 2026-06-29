@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useBrief, useProfileId } from "@/hooks";
 import { JOB_STATUS, MODELS, jobStatusVariant, type JobItem } from "@/lib/format";
@@ -30,19 +31,14 @@ export function MyJobs({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">My Jobs</h2>
-        <p className="text-muted-foreground text-xs">
-          {jobs ? `${open} open · ${jobs.length} total` : "Jobs you've posted"}
-        </p>
-      </div>
+ 
 
       {isLoading || !jobs ? (
         <ListSkeleton />
       ) : jobs.length === 0 ? (
         <Empty icon="solar:shop-outline" text="You haven't posted any jobs yet. Use “Create Job” to start." />
       ) : (
-        <div className="border-border bg-card divide-border overflow-hidden rounded-xl border shadow-xs divide-y">
+        <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
           {jobs.map((j) => (
             <JobRow key={j.id.toString()} job={j} onSelect={() => onSelect(j.id)} />
           ))}
@@ -55,24 +51,25 @@ export function MyJobs({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 function JobRow({ job, onSelect }: { job: JobItem; onSelect: () => void }) {
   const { data: brief } = useBrief(job.metadataCID);
   return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-accent group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-md font-medium">{brief?.title ?? (MODELS[job.model] ?? job.model)}</div>
-        <div className="mt-1 flex items-center gap-1.5">
+    <JobListRow
+      title={brief?.title ?? (MODELS[job.model] ?? String(job.model))}
+      timestamp={job.createdAt}
+      description={brief?.description}
+      onSelect={onSelect}
+      badges={
+        <>
           <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
             {JOB_STATUS[job.status]}
           </Badge>
           <Badge variant="subtle" className="shrink-0">
             {MODELS[job.model] ?? job.model}
           </Badge>
-        </div>
-      </div>
-      <span className="font-mono text-sm font-medium">{formatUnits(job.budget, 6)} USDC</span>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
+          <Badge variant="secondary" className="shrink-0 font-mono">
+            {formatUnits(job.budget, 6)} USDC
+          </Badge>
+        </>
+      }
+    />
   );
 }
 

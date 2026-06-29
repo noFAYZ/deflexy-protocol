@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { Icon } from "@iconify/react";
 import { Badge } from "@/components/ui/badge";
+import { JobListRow } from "@/components/JobRow";
 import { useDeflexy } from "@/deflexy";
 import { useBrief, useProfileId } from "@/hooks";
 import { MODELS, type JobItem } from "@/lib/format";
@@ -53,12 +54,7 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">My Jobs</h2>
-        <p className="text-muted-foreground text-xs">
-          {agreements ? `${activeCount} active · ${completedCount} completed` : "Jobs you've been hired for"}
-        </p>
-      </div>
+   
 
       {isError ? (
         <Empty icon="solar:cloud-cross-outline" text="Indexer offline — your jobs are unavailable." />
@@ -67,7 +63,7 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
       ) : agreements.length === 0 ? (
         <Empty icon="solar:case-minimalistic-outline" text="No accepted jobs yet. Apply to one from Find Jobs." />
       ) : (
-        <div className="border-border bg-card divide-border overflow-hidden rounded-xl border shadow-xs divide-y">
+        <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
           {agreements.map((a) => (
             <AgrRow key={a.id} agr={a} job={jobMap.get(a.jobId)} onSelect={() => onSelect(BigInt(a.jobId))} />
           ))}
@@ -80,24 +76,25 @@ export function FreelancerJobs({ onSelect }: { onSelect: (jobId: bigint) => void
 function AgrRow({ agr, job, onSelect }: { agr: Agr; job?: JobItem; onSelect: () => void }) {
   const { data: brief } = useBrief(job?.metadataCID);
   return (
-    <button
-      onClick={onSelect}
-      className="hover:bg-accent group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-md font-medium">{brief?.title ?? `Job #${agr.jobId}`}</div>
-        <div className="mt-1 flex items-center gap-1.5">
+    <JobListRow
+      title={brief?.title ?? `Job #${agr.jobId}`}
+      timestamp={job?.createdAt}
+      description={brief?.description}
+      onSelect={onSelect}
+      badges={
+        <>
           <Badge variant={agrVariant(agr.status)} className="shrink-0">
             {AGR_STATUS[agr.status]}
           </Badge>
           <Badge variant="subtle" className="shrink-0">
             {MODELS[agr.model] ?? agr.model}
           </Badge>
-        </div>
-      </div>
-      <span className="font-mono text-sm font-medium">{formatUnits(BigInt(agr.totalAmount), 6)} USDC</span>
-      <Icon icon="solar:alt-arrow-right-linear" className="text-muted-foreground/50 size-4 shrink-0" />
-    </button>
+          <Badge variant="secondary" className="shrink-0 font-mono">
+            {formatUnits(BigInt(agr.totalAmount), 6)} USDC
+          </Badge>
+        </>
+      }
+    />
   );
 }
 

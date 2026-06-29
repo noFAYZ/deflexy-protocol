@@ -21,11 +21,11 @@ export type JobStatus = (typeof JOB_STATUS)[number];
 export type BadgeVariant = NonNullable<BadgeProps["variant"]>;
 
 const STATUS_VARIANTS: Record<JobStatus, BadgeVariant> = {
-  None: "subtle",
-  Open: "lime",
-  Filled: "info",
-  Completed: "purple",
-  Cancelled: "danger",
+  None: "none",
+  Open: "open",
+  Filled: "filled",
+  Completed: "completed",
+  Cancelled: "cancelled",
 };
 
 export function jobStatusVariant(status: number): BadgeVariant {
@@ -42,6 +42,23 @@ export function modelLabel(model: number): Model {
 
 export const short = (address: string) =>
   `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+/** Compact relative time from a unix-seconds timestamp, e.g. "3h ago". */
+export function timeAgo(ts: bigint | number): string {
+  const s = Math.floor(Date.now() / 1000) - Number(ts);
+  if (s < 45) return "just now";
+  const units: [number, string][] = [
+    [31536000, "y"],
+    [2592000, "mo"],
+    [86400, "d"],
+    [3600, "h"],
+    [60, "m"],
+  ];
+  for (const [secs, label] of units) {
+    if (s >= secs) return `${Math.floor(s / secs)}${label} ago`;
+  }
+  return `${s}s ago`;
+}
 
 export interface JobItem {
   id: bigint;

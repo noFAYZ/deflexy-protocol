@@ -10,7 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { AttachmentLink } from "@/components/Attachment";
 import { ProfileName } from "@/components/ProfileName";
 import { useDeflexy, USDC } from "@/deflexy";
-import { useAttachment, useTx } from "@/hooks";
+import { useAttachment, useTx, withUploadToast } from "@/hooks";
 import { uploadAttachment } from "@/lib/ipfs";
 import { cn } from "@/lib/utils";
 
@@ -71,7 +71,7 @@ export function BidSheet({
     if (!deflexy || !valid) return;
     const ok = await tx.run(
       async () => {
-        const cid = await uploadAttachment(text, file);
+        const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving proposal…");
         return deflexy.write.submitBid(jobId, profileId, parseUnits(amount, 6), BigInt(daysNum) * DAY, cid);
       },
       [["bids", jobId.toString()]],

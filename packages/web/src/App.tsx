@@ -86,8 +86,8 @@ export default function App() {
         style={{ background: "radial-gradient(600px 240px at 50% -40px, var(--color-primary), transparent 70%)", opacity: 0.12 }}
       />
 
-      <header className="border-border/60 bg-background/70 sticky top-0 z-30 border-b backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
+      <header className="border-border/60 bg-muted sticky top-0 z-30 border-b backdrop-blur-xl">
+        <div className="mx-auto flex h-14 container items-center justify-between gap-3 px-4">
           <button onClick={goHome} className="flex items-center gap-2.5">
             <img src="/logo/DeFlexy-Icon2.svg" alt="Deflexy" className="size-14" />
             <span className="text-[15px] font-semibold tracking-tight">Deflexy</span>
@@ -104,7 +104,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-5 px-4 py-6 lg:grid-cols-[200px_minmax(0,1fr)_300px]">
+      <main className="mx-auto grid container gap-5 px-4 py-6 lg:grid-cols-[200px_minmax(0,1fr)_300px]">
         {/* Left — actions + nav */}
         <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
           {role === "client" && <CreateJobDialog />}

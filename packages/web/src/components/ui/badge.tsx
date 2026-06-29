@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 
 const baseStyles = [
   // Layout
-  "inline-flex items-center justify-center",
+  "inline-flex items-center justify-center shadow-xs",
   "w-fit shrink-0 whitespace-nowrap",
-  "rounded-md",
+  "rounded",
   // Spacing
   "px-2 py-0.5",
   // Typography
@@ -16,7 +16,7 @@ const baseStyles = [
   "leading-5",
   "tracking-wide",
   // Interaction
-  "transition-colors duration-150",
+  "transition-colors duration-100",
   "select-none",
   // SVG handling
   "[&>svg]:size-3",
@@ -111,6 +111,16 @@ export const badgeVariants = cva(baseStyles.join(" "), {
 
       slate:
         "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+
+      open:
+        "border bg-lime-300/70 border-lime-400/70 dark:bg-lime-950/40 dark:text-lime-400",
+
+        none:      "border bg-slate-300/70 border-slate-400/70 dark:bg-slate-950/40 dark:text-slate-400",
+
+        filled:    "border bg-sky-300/70 border-sky-400/70 dark:bg-sky-950/40 dark:text-sky-400",
+       completed: "border bg-emerald-300/70 border-emerald-400/70 dark:bg-emerald-950/40 dark:text-emerald-400",
+        cancelled: "border bg-rose-300/70 border-rose-400/70 dark:bg-rose-950/40 dark:text-rose-400",
+
     },
 
     // Optional border style overlay
@@ -121,8 +131,8 @@ export const badgeVariants = cva(baseStyles.join(" "), {
     },
 
     size: {
-      xs: "h-4 px-1.5 text-[10px] rounded gap-0.5",
-      sm: "h-5 px-2 text-[11px] rounded-sm gap-0.5",
+      xs: "h-4 px-1.5 text-[11px] rounded-md gap-0.5 uppercase font-mono",
+      sm: "h-4 px-2 text-[12px] rounded-full gap-0.5 ",
       md: "h-6 px-2.5 text-xs rounded-md gap-1",
       lg: "h-7 px-3 text-sm rounded-md gap-1.5",
     },
@@ -131,7 +141,7 @@ export const badgeVariants = cva(baseStyles.join(" "), {
   defaultVariants: {
     variant: "default",
     border: "none",
-    size: "sm",
+    size: "xs",
   },
 });
 

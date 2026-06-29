@@ -97,6 +97,12 @@ export const reputation = onchainTable("reputation", (t) => ({
   completedAsFreelancer: t.bigint().notNull(),
   completedAsEmployer: t.bigint().notNull(),
   volumeAsFreelancer: t.bigint().notNull(),
+  // Dispute facts (DisputeRecorded). A "loss" = the arbitrator ruled wholly for
+  // the counterparty; SPLIT/TERMINATED count as a dispute but not a loss.
+  disputesAsFreelancer: t.bigint().notNull(),
+  disputesLostAsFreelancer: t.bigint().notNull(),
+  disputesAsEmployer: t.bigint().notNull(),
+  disputesLostAsEmployer: t.bigint().notNull(),
 }));
 
 // agreementId -> vaultId. VaultCreated fires just before AgreementCreated in the

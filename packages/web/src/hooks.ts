@@ -159,6 +159,18 @@ const toastOpts = (label: string) => ({
   }),
 });
 
+/** Fire a Sileo toast around a slow upload (Pinata pin) so the user sees the
+ * upload phase before the transaction toast. Returns the original promise so the
+ * caller still gets the value (and its rejection). */
+export function withUploadToast<T>(p: Promise<T>, title = "Uploading…"): Promise<T> {
+  sileo.promise(p, {
+    loading: { title },
+    success: { title: "Stored privately" },
+    error: () => ({ title: "Upload failed" }),
+  });
+  return p;
+}
+
 /** The connected wallet's protocol profile id (0n if none). */
 export function useProfileId() {
   const { address } = useAccount();

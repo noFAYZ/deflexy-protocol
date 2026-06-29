@@ -7,6 +7,8 @@ import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { getAddress, isAddress, keccak256, verifyMessage, type Hex } from "viem";
 import { PinataSDK } from "pinata";
+import { type Logger } from "pino";
+import { logger, requestLogger, timed, type AppEnv } from "./logger";
 
 const {
   PINATA_JWT,
@@ -42,8 +44,8 @@ function persistRefs() {
   try {
     mkdirSync("data", { recursive: true });
     writeFileSync(REFS_FILE, JSON.stringify(Object.fromEntries(cidByRef)));
-  } catch (e) {
-    console.error("persistRefs failed:", e);
+  } catch (err) {
+    logger.error({ err }, "persistRefs failed");
   }
 }
 
@@ -59,8 +61,10 @@ export function loginMessage(address: string, issued: number, nonce: string) {
 
 const SESSION_TTL = 60 * 60 * 24; // 1 day
 const SIGN_WINDOW = 5 * 60 * 1000; // signed message must be < 5 min old
+const MAX_UPLOAD = 25 * 1024 * 1024; // 25 MB cap on direct (signed-url) uploads
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
+app.use("/*", requestLogger()); // first: time + tag every request
 app.use("/*", cors({ origin: WEB_ORIGIN, allowHeaders: ["Authorization", "Content-Type"] }));
 
 app.get("/health", (c) => c.json({ ok: true }));
@@ -74,12 +78,16 @@ app.post("/session", async (c) => {
   // ponytail: stateless nonce — a captured signature is replayable for up to SIGN_WINDOW.
   // Acceptable for an "any signed-in user" gate; add a one-time nonce store to close it.
   const ok = await verifyMessage({ address, message: loginMessage(address, issued, nonce), signature });
-  if (!ok) return c.json({ error: "bad signature" }, 401);
+  if (!ok) {
+    c.get("log").warn({ address }, "siwe signature rejected");
+    return c.json({ error: "bad signature" }, 401);
+  }
   const token = await sign(
     { sub: getAddress(address), exp: Math.floor(Date.now() / 1000) + SESSION_TTL },
     AUTH_SECRET,
     "HS256",
   );
+  c.get("log").info({ address: getAddress(address) }, "session issued");
   return c.json({ token });
 });
 
@@ -96,24 +104,29 @@ const requireAuth = async (c: any, next: any) => {
 };
 
 // --- private storage ----------------------------------------------------------
-async function pinPrivate(file: File, ref: Hex): Promise<string> {
+async function pinPrivate(file: File, ref: Hex, log: Logger = logger): Promise<string> {
   const cached = cidByRef.get(ref);
-  if (cached) return cached;
+  if (cached) {
+    log.debug({ ref, cid: cached }, "pin cache hit");
+    return cached;
+  }
   // ponytail: file bytes proxy through this server. Swap to pinata.upload.private
   // .createSignedURL() for direct browser->Pinata uploads if bandwidth bites.
-  const res = await pinata.upload.private.file(file).keyvalues({ ref });
+  const [res, ms] = await timed(() => pinata.upload.private.file(file).keyvalues({ ref }));
   cidByRef.set(ref, res.cid);
   persistRefs();
+  log.info({ ref, cid: res.cid, bytes: file.size, ms, op: "pinata.upload" }, `pinned private file in ${ms}ms`);
   return res.cid;
 }
 
-async function resolveCid(ref: string): Promise<string | null> {
+async function resolveCid(ref: string, log: Logger = logger): Promise<string | null> {
   if (cidByRef.has(ref)) return cidByRef.get(ref)!;
   // Re-read the persisted map (a backfill or another instance may have added it).
   for (const [k, v] of loadRefs()) if (!cidByRef.has(k)) cidByRef.set(k, v);
   if (cidByRef.has(ref)) return cidByRef.get(ref)!;
   // Last resort: Pinata's keyvalue index (only reliable for files that got tagged).
-  const { files } = await pinata.files.private.list().keyvalues({ ref });
+  const [{ files }, ms] = await timed(() => pinata.files.private.list().keyvalues({ ref }));
+  log.warn({ ref, ms, op: "pinata.files.list" }, `ref missing from cache — Pinata list ${ms}ms`);
   const cid = files?.[0]?.cid ?? null;
   if (cid) {
     cidByRef.set(ref, cid);
@@ -127,7 +140,41 @@ app.post("/upload/file", requireAuth, async (c) => {
   const file = form.get("file");
   if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
   const ref = keccak256(new Uint8Array(await file.arrayBuffer()));
-  await pinPrivate(file, ref);
+  await pinPrivate(file, ref, c.get("log"));
+  return c.json({ ref });
+});
+
+// --- direct browser->Pinata uploads (signed URLs) -----------------------------
+// Bytes skip this server entirely: the client computes ref = keccak256(content),
+// asks us to mint a short-lived signed URL, uploads straight to Pinata, then
+// registers the resulting cid. Halves transfer for large files and keeps file
+// bytes off our bandwidth. (Tiny JSON briefs stay on /upload/json — no transfer
+// win there, and they need server-side cache warming + a trustworthy ref.)
+app.post("/upload/sign", requireAuth, async (c) => {
+  const { ref } = await c.req.json();
+  if (typeof ref !== "string" || !ref.startsWith("0x")) return c.json({ error: "bad ref" }, 400);
+  const cached = cidByRef.get(ref);
+  if (cached) return c.json({ cid: cached }); // already pinned — client skips the upload
+  // keyvalues={ref} keeps the resolveCid list-fallback working for direct uploads.
+  const [url, ms] = await timed(() =>
+    pinata.upload.private.createSignedURL({ expires: 60, keyvalues: { ref }, maxFileSize: MAX_UPLOAD }),
+  );
+  c.get("log").info({ ref, ms, op: "pinata.signedUrl" }, `signed upload url in ${ms}ms`);
+  return c.json({ url });
+});
+
+app.post("/upload/commit", requireAuth, async (c) => {
+  const { ref, cid } = await c.req.json();
+  if (typeof ref !== "string" || typeof cid !== "string") return c.json({ error: "bad input" }, 400);
+  // First-writer-wins. Refs are content hashes, so overwriting a known mapping
+  // would only matter to someone who already holds that exact content.
+  // ponytail: we trust the authenticated client's cid<->ref pairing; re-hash the
+  // fetched content to verify if this ever gates anything valuable.
+  if (!cidByRef.has(ref)) {
+    cidByRef.set(ref, cid);
+    persistRefs();
+    c.get("log").info({ ref, cid, op: "upload.commit" }, "registered direct upload");
+  }
   return c.json({ ref });
 });
 
@@ -135,19 +182,26 @@ app.post("/upload/json", requireAuth, async (c) => {
   const data = await c.req.json();
   const bytes = new TextEncoder().encode(JSON.stringify(data));
   const ref = keccak256(bytes);
-  await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref);
+  await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref, c.get("log"));
+  // Warm the read cache now: the JSON is content-addressed and immutable, so the
+  // first /brief reader (often a different user) skips the slow cold gateway fetch.
+  briefCache.set(ref, data);
   return c.json({ ref });
 });
 
 // Returns the brief JSON directly (one round trip, no separate gateway fetch) and caches
 // it server-side. Small immutable payload → safe to memoize indefinitely.
 app.post("/brief", requireAuth, async (c) => {
+  const log = c.get("log");
   const { ref } = await c.req.json();
   if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
   if (briefCache.has(ref)) return c.json({ data: briefCache.get(ref) });
-  const cid = await resolveCid(ref);
+  // Cold path (cache miss): two Pinata round-trips. Time each so the slow log
+  // shows whether `resolve` (files.list) or `gateway` (content fetch) dominates.
+  const [cid, resolveMs] = await timed(() => resolveCid(ref, log));
   if (!cid) return c.json({ error: "not found" }, 404);
-  const { data } = await pinata.gateways.private.get(cid); // SDK parses application/json
+  const [{ data }, gatewayMs] = await timed(() => pinata.gateways.private.get(cid)); // SDK parses JSON
+  log.info({ ref, cid, resolveMs, gatewayMs, op: "brief.cold" }, `cold brief: resolve ${resolveMs}ms + gateway ${gatewayMs}ms`);
   briefCache.set(ref, data ?? null);
   return c.json({ data: data ?? null });
 });
@@ -155,7 +209,7 @@ app.post("/brief", requireAuth, async (c) => {
 app.post("/access", requireAuth, async (c) => {
   const { ref, img } = await c.req.json();
   if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
-  const cid = await resolveCid(ref);
+  const cid = await resolveCid(ref, c.get("log"));
   if (!cid) return c.json({ error: "not found" }, 404);
   let link = pinata.gateways.private.createAccessLink({ cid, expires: 120 });
   // Optimized thumbnails: Pinata resizes/transcodes server-side, so the browser only
@@ -166,4 +220,6 @@ app.post("/access", requireAuth, async (c) => {
   return c.json({ url: await link });
 });
 
-serve({ fetch: app.fetch, port: Number(PORT) }, (i) => console.log(`@deflexy/api listening on :${i.port}`));
+serve({ fetch: app.fetch, port: Number(PORT) }, (i) =>
+  logger.info({ port: i.port, origin: WEB_ORIGIN }, `@deflexy/api listening on :${i.port}`),
+);

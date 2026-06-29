@@ -13,6 +13,8 @@ interface Rep {
   completedAsFreelancer: string;
   completedAsEmployer: string;
   volumeAsFreelancer: string;
+  disputesAsFreelancer: string;
+  disputesLostAsFreelancer: string;
 }
 
 /** Browse profiles ranked by reputation (indexer). Surfaces the whole directory, not just
@@ -29,7 +31,7 @@ export function Directory() {
     queryFn: async () => {
       const d = await deflexy!.query.raw<{ reputations: { items: Rep[] } }>(
         `{ reputations(orderBy: "volumeAsFreelancer", orderDirection: "desc", limit: 100) {
-            items { id completedAsFreelancer completedAsEmployer volumeAsFreelancer }
+            items { id completedAsFreelancer completedAsEmployer volumeAsFreelancer disputesAsFreelancer disputesLostAsFreelancer }
         } }`,
       );
       return d.reputations.items;
@@ -78,6 +80,9 @@ export function Directory() {
                 </div>
                 <div className="text-muted-foreground text-xs">
                   {r.completedAsFreelancer} as freelancer · {r.completedAsEmployer} as client
+                  {BigInt(r.disputesAsFreelancer) > 0n && (
+                    <> · {r.disputesLostAsFreelancer}/{r.disputesAsFreelancer} disputes lost</>
+                  )}
                 </div>
               </div>
               <Badge variant="secondary" className="font-mono">{usdc(BigInt(r.volumeAsFreelancer))}</Badge>

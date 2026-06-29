@@ -61,9 +61,10 @@ export function createQuery(indexerUrl?: string): QueryClient {
         id: profileId.toString(),
       }),
     reputation: (profileId) =>
-      raw(`query($id: BigInt!) { reputation(id: $id) { completedAsFreelancer completedAsEmployer volumeAsFreelancer } }`, {
-        id: profileId.toString(),
-      }),
+      raw(
+        `query($id: BigInt!) { reputation(id: $id) { completedAsFreelancer completedAsEmployer volumeAsFreelancer disputesAsFreelancer disputesLostAsFreelancer disputesAsEmployer disputesLostAsEmployer } }`,
+        { id: profileId.toString() },
+      ),
     paymentsForVault: (vaultId) =>
       raw(`query($id: BigInt!) { payments(where: { vaultId: $id }) { items { id kind account amount txHash blockNumber } } }`, {
         id: vaultId.toString(),

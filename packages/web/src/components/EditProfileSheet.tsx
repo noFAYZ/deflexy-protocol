@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDeflexy } from "@/deflexy";
-import { useTx } from "@/hooks";
+import { useTx, withUploadToast } from "@/hooks";
 import { uploadProfileMeta, type ProfileMeta } from "@/lib/ipfs";
 
 export function EditProfileSheet({
@@ -39,7 +39,7 @@ export function EditProfileSheet({
     if (!deflexy) return;
     let ref: `0x${string}`;
     try {
-      ref = await uploadProfileMeta(name.trim(), bio.trim());
+      ref = await withUploadToast(uploadProfileMeta(name.trim(), bio.trim()), "Saving profile…");
     } catch (e) {
       tx.setError(e instanceof Error ? e.message : "Upload failed");
       return;

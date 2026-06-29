@@ -12,13 +12,14 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AttachmentField, AttachmentLink } from "@/components/Attachment";
 import { useDeflexy, USDC } from "@/deflexy";
-import { useTx, useBatchTx, type Call } from "@/hooks";
+import { useTx, useBatchTx, withUploadToast, type Call } from "@/hooks";
 import { uploadAttachment } from "@/lib/ipfs";
 import { short } from "@/lib/format";
 
 const AGR_STATUS = ["None", "Active", "Disputed", "Resolved", "Completed", "Terminated"];
-const WU_STATUS = ["None", "Created", "In progress", "Submitted", "Revision requested", "Approved", "Settled"];
+const WU_STATUS = ["None", "Created", "In progress", "Submitted", "Revision requested", "Approved", "Settled", "Cancelled"];
 const APPROVAL_WINDOW = 1_209_600n; // 14 days
+const MODEL_FIXED = 0;
 
 export interface AgreementData {
   id: bigint;
@@ -31,6 +32,8 @@ export interface AgreementData {
   vaultId: bigint;
   status: number;
   outstandingUnits: number;
+  model: number; // 0 = Fixed, 1 = Milestone
+  lastDisputeClearedAt: bigint; // §D1: liveness clocks resume from here
 }
 
 const usdc = (v: bigint) => `${formatUnits(v, 6)} USDC`;
@@ -78,7 +81,7 @@ function FundButton({ agreementId, invKeys }: { agreementId: bigint; invKeys: un
 }
 
 /** "Add work unit" button → AddWorkUnitForm in a sheet. */
-function AddWorkUnitButton({ agreementId, units, max, invKeys }: { agreementId: bigint; units: { sequence: bigint }[]; max: bigint; invKeys: unknown[][] }) {
+function AddWorkUnitButton({ agreementId, units, max, model, invKeys }: { agreementId: bigint; units: { sequence: bigint }[]; max: bigint; model: number; invKeys: unknown[][] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -86,7 +89,7 @@ function AddWorkUnitButton({ agreementId, units, max, invKeys }: { agreementId: 
         <Icon icon="solar:add-circle-outline" className="size-4" /> Add work unit
       </Button>
       <FormSheet open={open} onOpenChange={setOpen} title="Add work unit" desc="Break the job into a milestone for the freelancer to deliver.">
-        <AddWorkUnitForm agreementId={agreementId} units={units} max={max} invKeys={invKeys} onDone={() => setOpen(false)} />
+        <AddWorkUnitForm agreementId={agreementId} units={units} max={max} model={model} invKeys={invKeys} onDone={() => setOpen(false)} />
       </FormSheet>
     </>
   );
@@ -204,7 +207,7 @@ export function AgreementSection({
         <div className="space-y-4">
           {/* Employer adds milestones */}
           {isEmployer && active && remaining > 0n && (
-            <AddWorkUnitButton agreementId={aid} units={units ?? []} max={remaining} invKeys={invKeys} />
+            <AddWorkUnitButton agreementId={aid} units={units ?? []} max={remaining} model={agreement.model} invKeys={invKeys} />
           )}
 
           {/* Work units */}
@@ -218,6 +221,7 @@ export function AgreementSection({
                 isFreelancer={isFreelancer}
                 active={active}
                 available={avail}
+                disputeClearedAt={agreement.lastDisputeClearedAt}
                 invKeys={invKeys}
               />
             ))}
@@ -315,30 +319,34 @@ export function FundForm({ agreementId, invKeys, onDone }: { agreementId: bigint
   );
 }
 
-export function AddWorkUnitForm({ agreementId, units, max, invKeys, onDone }: { agreementId: bigint; units: { sequence: bigint }[]; max: bigint; invKeys: unknown[][]; onDone?: () => void }) {
+export function AddWorkUnitForm({ agreementId, units, max, model, invKeys, onDone }: { agreementId: bigint; units: { sequence: bigint }[]; max: bigint; model: number; invKeys: unknown[][]; onDone?: () => void }) {
   const deflexy = useDeflexy();
   const tx = useTx();
-  const [amt, setAmt] = useState("");
+  // FIXED = one unit for the whole amount; lock the field so the tx can't revert
+  // on InvalidFixedAmount. MILESTONE is free to split.
+  const fixed = model === MODEL_FIXED;
+  const [amt, setAmt] = useState(fixed ? formatUnits(max, 6) : "");
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const nextSeq = units.reduce((m, u) => (u.sequence > m ? u.sequence : m), 0n) + 1n;
 
   async function add() {
     if (!deflexy) return;
+    const amount = fixed ? max : parseUnits(amt || "0", 6);
     const ok = await tx.run(async () => {
-      const cid = await uploadAttachment(text, file);
-      return deflexy.write.addWorkUnit(agreementId, nextSeq, parseUnits(amt || "0", 6), cid);
+      const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving brief…");
+      return deflexy.write.addWorkUnit(agreementId, nextSeq, amount, cid);
     }, invKeys as any, "Work unit added");
-    setAmt("");
+    setAmt(fixed ? formatUnits(max, 6) : "");
     setText("");
     setFile(null);
     if (ok) onDone?.();
   }
   return (
     <div className="space-y-2">
-      <Label>Add work unit (≤ {usdc(max)})</Label>
-      <Input value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" placeholder="Amount (USDC)" />
-      <AttachmentField label="Brief" text={text} setText={setText} file={file} setFile={setFile} placeholder="What this milestone covers…" />
+      <Label>{fixed ? `Fixed price — full amount (${usdc(max)})` : `Add work unit (≤ ${usdc(max)})`}</Label>
+      <Input value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" placeholder="Amount (USDC)" disabled={fixed} />
+      <AttachmentField label="Brief" text={text} setText={setText} file={file} setFile={setFile} placeholder={fixed ? "What this delivery covers…" : "What this milestone covers…"} />
       {tx.error && <p className="text-destructive text-xs">{tx.error}</p>}
       <Button onClick={add} loading={tx.busy} disabled={!amt} variant="secondary" className="w-full">
         {`Add work unit #${nextSeq.toString()}`}
@@ -354,6 +362,7 @@ export interface Unit {
   status: number;
   metadataCID: Hex;
   submissionCID: Hex;
+  createdAt: bigint;
   submittedAt: bigint;
 }
 
@@ -363,6 +372,7 @@ export function WorkUnitRow({
   isFreelancer,
   active,
   available,
+  disputeClearedAt,
   invKeys,
 }: {
   unit: Unit;
@@ -370,6 +380,7 @@ export function WorkUnitRow({
   isFreelancer: boolean;
   active: boolean;
   available: bigint;
+  disputeClearedAt: bigint;
   invKeys: unknown[][];
 }) {
   const deflexy = useDeflexy();
@@ -379,7 +390,15 @@ export function WorkUnitRow({
   const [open, setOpen] = useState(false);
 
   const now = BigInt(Math.floor(Date.now() / 1000));
-  const timedOut = unit.status === 3 && unit.submittedAt > 0n && now > unit.submittedAt + APPROVAL_WINDOW;
+  // Clocks resume from the later of the unit's own time and the last dispute
+  // clearing (§D1), matching the contract — so buttons don't promise actions
+  // that would revert.
+  const submitDeadline = (unit.submittedAt > disputeClearedAt ? unit.submittedAt : disputeClearedAt) + APPROVAL_WINDOW;
+  const cancelRef = unit.submittedAt > 0n ? unit.submittedAt : unit.createdAt;
+  const cancelDeadline = (cancelRef > disputeClearedAt ? cancelRef : disputeClearedAt) + APPROVAL_WINDOW;
+  const timedOut = unit.status === 3 && unit.submittedAt > 0n && now >= submitDeadline;
+  const cancellable = unit.status === 1 || unit.status === 2 || unit.status === 4; // Created/InProgress/Revision
+  const canCancel = cancellable && now >= cancelDeadline;
   const funded = available >= unit.amount;
 
   const act = (fn: () => Promise<Hex>, label: string) => tx.run(fn, invKeys as any, label);
@@ -387,7 +406,7 @@ export function WorkUnitRow({
     if (!deflexy) return;
     const okTx = await tx.run(
       async () => {
-        const cid = await uploadAttachment(text, file);
+        const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
         return deflexy.write.submitWork(unit.id, cid);
       },
       invKeys as any,
@@ -444,6 +463,18 @@ export function WorkUnitRow({
           {unit.status === 5 && (
             <Button size="sm" loading={tx.busy} onClick={() => act(() => deflexy.write.settleWorkUnit(unit.id), "Payment settled")}>
               Settle payment
+            </Button>
+          )}
+          {isEmployer && cancellable && (
+            <Button
+              size="sm"
+              variant="outline"
+              loading={tx.busy}
+              disabled={!canCancel}
+              title={canCancel ? "Void this unit and free its escrow" : "Available once the approval window elapses with no submission"}
+              onClick={() => act(() => deflexy.write.cancelWorkUnit(unit.id), "Work unit cancelled")}
+            >
+              {canCancel ? "Cancel & reclaim" : "Cancel (after window)"}
             </Button>
           )}
         </div>
@@ -580,7 +611,7 @@ function DisputeBlock({
       if (!deflexy) return;
       const okTx = await tx.run(
         async () => {
-          const cid = await uploadAttachment(text, file);
+          const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
           return deflexy.write.submitEvidence(dispute!.id, cid);
         },
         keys as any,
@@ -649,7 +680,7 @@ function DisputeBlock({
     if (!deflexy) return;
     const okTx = await tx.run(
       async () => {
-        const cid = await uploadAttachment(text, file);
+        const cid = await withUploadToast(uploadAttachment(text, file), file ? "Uploading attachment…" : "Saving note…");
         return deflexy.write.openDispute(agreementId, cid);
       },
       keys as any,

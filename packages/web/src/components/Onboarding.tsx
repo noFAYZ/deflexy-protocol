@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { baseSepolia } from "wagmi/chains";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { useDeflexy } from "@/deflexy";
-import { useProfileId, useTx } from "@/hooks";
+import { useProfileId, useTx, withUploadToast } from "@/hooks";
 import { uploadProfileMeta } from "@/lib/ipfs";
 import { type Role } from "@/components/RoleSwitcher";
 import { cn } from "@/lib/utils";
@@ -155,21 +156,32 @@ const ROLE_CARDS: { role: Role; title: string; desc: string; icon: string }[] = 
 
 function ProfileStep({ role, setRole }: { role: Role; setRole: (r: Role) => void }) {
   const deflexy = useDeflexy();
+  const { address } = useAccount();
+  const qc = useQueryClient();
   const tx = useTx();
   const [name, setName] = useState("");
   const [pick, setPick] = useState<Role>(role);
 
   async function create() {
-    if (!deflexy || !name.trim()) return;
+    if (!deflexy || !address || !name.trim()) return;
     let ref: `0x${string}`;
     try {
-      ref = await uploadProfileMeta(name.trim(), "");
+      ref = await withUploadToast(uploadProfileMeta(name.trim(), ""), "Saving profile…");
     } catch (e) {
       tx.setError(e instanceof Error ? e.message : "Upload failed");
       return;
     }
-    const ok = await tx.run(() => deflexy.write.createProfile(ref), [["profile"]], "Profile created");
-    if (ok) setRole(pick);
+    // Don't invalidate inside tx.run: the RPC can still return profileOf=0n right after the
+    // receipt (read lag), react-query would cache that 0n, and the gate would never lift.
+    const ok = await tx.run(() => deflexy.write.createProfile(ref), [], "Profile created");
+    if (!ok) return;
+    setRole(pick);
+    // Poll until the new profile is actually readable, then refresh the gate.
+    for (let i = 0; i < 12; i++) {
+      if (((await deflexy.read.profileOf(address)) ?? 0n) !== 0n) break;
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    qc.invalidateQueries({ queryKey: ["profile"] });
   }
 
   return (
