@@ -7,6 +7,8 @@ import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { getAddress, isAddress, keccak256, verifyMessage, type Hex } from "viem";
 import { PinataSDK } from "pinata";
+import { type Logger } from "pino";
+import { logger, requestLogger, timed, type AppEnv } from "./logger";
 
 const {
   PINATA_JWT,
@@ -42,8 +44,8 @@ function persistRefs() {
   try {
     mkdirSync("data", { recursive: true });
     writeFileSync(REFS_FILE, JSON.stringify(Object.fromEntries(cidByRef)));
-  } catch (e) {
-    console.error("persistRefs failed:", e);
+  } catch (err) {
+    logger.error({ err }, "persistRefs failed");
   }
 }
 
@@ -60,7 +62,8 @@ export function loginMessage(address: string, issued: number, nonce: string) {
 const SESSION_TTL = 60 * 60 * 24; // 1 day
 const SIGN_WINDOW = 5 * 60 * 1000; // signed message must be < 5 min old
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
+app.use("/*", requestLogger()); // first: time + tag every request
 app.use("/*", cors({ origin: WEB_ORIGIN, allowHeaders: ["Authorization", "Content-Type"] }));
 
 app.get("/health", (c) => c.json({ ok: true }));
@@ -74,12 +77,16 @@ app.post("/session", async (c) => {
   // ponytail: stateless nonce — a captured signature is replayable for up to SIGN_WINDOW.
   // Acceptable for an "any signed-in user" gate; add a one-time nonce store to close it.
   const ok = await verifyMessage({ address, message: loginMessage(address, issued, nonce), signature });
-  if (!ok) return c.json({ error: "bad signature" }, 401);
+  if (!ok) {
+    c.get("log").warn({ address }, "siwe signature rejected");
+    return c.json({ error: "bad signature" }, 401);
+  }
   const token = await sign(
     { sub: getAddress(address), exp: Math.floor(Date.now() / 1000) + SESSION_TTL },
     AUTH_SECRET,
     "HS256",
   );
+  c.get("log").info({ address: getAddress(address) }, "session issued");
   return c.json({ token });
 });
 
@@ -96,14 +103,18 @@ const requireAuth = async (c: any, next: any) => {
 };
 
 // --- private storage ----------------------------------------------------------
-async function pinPrivate(file: File, ref: Hex): Promise<string> {
+async function pinPrivate(file: File, ref: Hex, log: Logger = logger): Promise<string> {
   const cached = cidByRef.get(ref);
-  if (cached) return cached;
+  if (cached) {
+    log.debug({ ref, cid: cached }, "pin cache hit");
+    return cached;
+  }
   // ponytail: file bytes proxy through this server. Swap to pinata.upload.private
   // .createSignedURL() for direct browser->Pinata uploads if bandwidth bites.
-  const res = await pinata.upload.private.file(file).keyvalues({ ref });
+  const [res, ms] = await timed(() => pinata.upload.private.file(file).keyvalues({ ref }));
   cidByRef.set(ref, res.cid);
   persistRefs();
+  log.info({ ref, cid: res.cid, bytes: file.size, ms, op: "pinata.upload" }, `pinned private file in ${ms}ms`);
   return res.cid;
 }
 
@@ -127,7 +138,7 @@ app.post("/upload/file", requireAuth, async (c) => {
   const file = form.get("file");
   if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
   const ref = keccak256(new Uint8Array(await file.arrayBuffer()));
-  await pinPrivate(file, ref);
+  await pinPrivate(file, ref, c.get("log"));
   return c.json({ ref });
 });
 
@@ -135,7 +146,7 @@ app.post("/upload/json", requireAuth, async (c) => {
   const data = await c.req.json();
   const bytes = new TextEncoder().encode(JSON.stringify(data));
   const ref = keccak256(bytes);
-  await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref);
+  await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref, c.get("log"));
   return c.json({ ref });
 });
 
@@ -166,4 +177,6 @@ app.post("/access", requireAuth, async (c) => {
   return c.json({ url: await link });
 });
 
-serve({ fetch: app.fetch, port: Number(PORT) }, (i) => console.log(`@deflexy/api listening on :${i.port}`));
+serve({ fetch: app.fetch, port: Number(PORT) }, (i) =>
+  logger.info({ port: i.port, origin: WEB_ORIGIN }, `@deflexy/api listening on :${i.port}`),
+);
