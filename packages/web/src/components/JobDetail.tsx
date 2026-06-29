@@ -120,6 +120,11 @@ export function JobDetail({ jobId, onBack }: { jobId: bigint; onBack: () => void
           {/* Badges below title */}
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={jobStatusVariant(job.status)}>{JOB_STATUS[job.status]}</Badge>
+            {brief?.category && (
+              <Badge variant="subtle" className="gap-1">
+                <Icon icon="solar:folder-outline" className="size-3" /> {brief.category}
+              </Badge>
+            )}
             <Badge variant="secondary" className="gap-1">
               <Icon icon="solar:checklist-minimalistic-outline" className="size-3" /> {MODELS[job.model] ?? String(job.model)}
             </Badge>
@@ -131,7 +136,16 @@ export function JobDetail({ jobId, onBack }: { jobId: bigint; onBack: () => void
                 <Icon icon="solar:calendar-outline" className="size-3" /> {new Date(Number(job.createdAt) * 1000).toLocaleDateString()}
               </Badge>
             )}
-          </div></div>
+          </div>
+          {!!brief?.tags?.length && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {brief.tags.map((t) => (
+                <Badge key={t} variant="outline">
+                  #{t}
+                </Badge>
+              ))}
+            </div>
+          )}</div>
 
           {/* Brief (clamped, expandable) */}
           <BriefBody brief={brief} loading={briefLoading} />

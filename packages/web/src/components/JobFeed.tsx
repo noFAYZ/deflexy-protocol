@@ -71,11 +71,19 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
 
   const term = search.trim().toLowerCase();
   const rows = open
-    .map((job, i) => ({ job, title: briefs[i]?.data?.title ?? "", description: briefs[i]?.data?.description ?? "" }))
+    .map((job, i) => ({
+      job,
+      title: briefs[i]?.data?.title ?? "",
+      description: briefs[i]?.data?.description ?? "",
+      category: briefs[i]?.data?.category ?? "",
+      tags: briefs[i]?.data?.tags ?? [],
+    }))
     .filter(
-      ({ job, title }) =>
+      ({ job, title, category, tags }) =>
         !term ||
         title.toLowerCase().includes(term) ||
+        category.toLowerCase().includes(term) ||
+        tags.some((t) => t.includes(term)) ||
         (MODELS[job.model] ?? "").toLowerCase().includes(term) ||
         `#${job.id}`.includes(term),
     );
@@ -121,18 +129,24 @@ export function JobFeed({ onSelect }: { onSelect: (jobId: bigint) => void }) {
         </div>
       ) : (
         <div className="border-border bg-card divide-border overflow-hidden rounded border shadow-xs divide-y">
-          {rows.map(({ job, title, description }) => (
+          {rows.map(({ job, title, description, category, tags }) => (
             <JobListRow
               key={job.id.toString()}
               title={title || (MODELS[job.model] ?? String(job.model))}
               timestamp={job.createdAt}
               description={description}
+              tags={tags}
               onSelect={() => onSelect(job.id)}
               badges={
                 <>
                   <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
                     {JOB_STATUS[job.status]}
                   </Badge>
+                  {category && (
+                    <Badge variant="subtle" className="shrink-0">
+                      {category}
+                    </Badge>
+                  )}
                   <Badge variant="subtle" className="shrink-0">
                     {MODELS[job.model] ?? job.model}
                   </Badge>

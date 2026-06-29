@@ -80,12 +80,18 @@ function AgrRow({ agr, job, onSelect }: { agr: Agr; job?: JobItem; onSelect: () 
       title={brief?.title ?? `Job #${agr.jobId}`}
       timestamp={job?.createdAt}
       description={brief?.description}
+      tags={brief?.tags}
       onSelect={onSelect}
       badges={
         <>
           <Badge variant={agrVariant(agr.status)} className="shrink-0">
             {AGR_STATUS[agr.status]}
           </Badge>
+          {brief?.category && (
+            <Badge variant="subtle" className="shrink-0">
+              {brief.category}
+            </Badge>
+          )}
           <Badge variant="subtle" className="shrink-0">
             {MODELS[agr.model] ?? agr.model}
           </Badge>

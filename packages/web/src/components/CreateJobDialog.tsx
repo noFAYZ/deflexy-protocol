@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDeflexy, USDC } from "@/deflexy";
 import { useTx } from "@/hooks";
-import { uploadBrief, type UploadPhase } from "@/lib/ipfs";
-import { MODELS } from "@/lib/format";
+import { uploadBrief, normalizeTags, type UploadPhase } from "@/lib/ipfs";
+import { CATEGORIES, MODELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Details", "Settlement", "Budget"];
@@ -77,6 +77,9 @@ export function CreateJobDialog() {
   const [model, setModel] = useState(0);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
+  const [category, setCategory] = useState<string>("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   // null when idle; otherwise the current submit stage for the progress checklist.
@@ -108,8 +111,13 @@ export function CreateJobDialog() {
     let ref: `0x${string}`;
     setUploading(true);
     try {
+      // Fold any half-typed tag into the set before submitting.
+      const allTags = normalizeTags(tagInput.trim() ? [...tags, tagInput] : tags);
       // Brief → private Pinata storage (prompts a wallet sign-in on first use).
-      const r = await uploadBrief(title.trim(), desc, file ? [file] : [], setPhase);
+      const r = await uploadBrief(title.trim(), desc, file ? [file] : [], setPhase, {
+        category: category || undefined,
+        tags: allTags,
+      });
       ref = r.ref;
       // Prime the cache so the feed/detail render the title immediately, no refetch.
       queryClient.setQueryData(["brief", r.ref], r.brief);
@@ -130,6 +138,9 @@ export function CreateJobDialog() {
     if (ok) {
       setTitle("");
       setDesc("");
+      setCategory("");
+      setTags([]);
+      setTagInput("");
       setFile(null);
       setStep(0);
       setOpen(false);
@@ -260,6 +271,50 @@ export function CreateJobDialog() {
                       rows={6}
                       placeholder="Scope, deliverables, and expectations. Stored privately — only signed-in users can read it."
                       className="resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {CATEGORIES.map((c) => (
+                        <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? "" : c)}>
+                          {c}
+                        </Chip>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="job-tags">Tags (optional)</Label>
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTags(tags.filter((x) => x !== t))}
+                            className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition"
+                          >
+                            {t}
+                            <Icon icon="solar:close-circle-bold" className="size-3.5" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <Input
+                      id="job-tags"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                          e.preventDefault();
+                          setTags((prev) => normalizeTags([...prev, tagInput]));
+                          setTagInput("");
+                        } else if (e.key === "Backspace" && !tagInput && tags.length) {
+                          setTags(tags.slice(0, -1));
+                        }
+                      }}
+                      placeholder={tags.length >= 6 ? "Max 6 tags" : "Type a tag, press Enter"}
+                      disabled={tags.length >= 6}
                     />
                   </div>
                   <div className="space-y-2">
