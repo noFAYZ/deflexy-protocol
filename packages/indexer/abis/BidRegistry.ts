@@ -130,19 +130,6 @@ export const BidRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "markRejected",
-    "inputs": [
-      {
-        "name": "bidId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -281,19 +268,6 @@ export const BidRegistryAbi = [
   {
     "type": "event",
     "name": "BidAccepted",
-    "inputs": [
-      {
-        "name": "bidId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "BidRejected",
     "inputs": [
       {
         "name": "bidId",

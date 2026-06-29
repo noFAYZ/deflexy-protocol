@@ -22,6 +22,19 @@ export const DisputeManagerAbi = [
   },
   {
     "type": "function",
+    "name": "REDISPUTE_COOLDOWN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "agreements",
     "inputs": [],
     "outputs": [
@@ -213,6 +226,25 @@ export const DisputeManagerAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IProfileRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "redisputeAllowedAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -460,5 +492,10 @@ export const DisputeManagerAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "RedisputeCooldown",
+    "inputs": []
   }
 ] as const;

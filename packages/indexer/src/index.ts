@@ -71,9 +71,6 @@ ponder.on("BidRegistry:BidWithdrawn", async ({ event, context }) => {
 ponder.on("BidRegistry:BidAccepted", async ({ event, context }) => {
   await context.db.update(schema.bid, { id: event.args.bidId }).set({ status: 2 });
 });
-ponder.on("BidRegistry:BidRejected", async ({ event, context }) => {
-  await context.db.update(schema.bid, { id: event.args.bidId }).set({ status: 4 });
-});
 
 // ---------- AgreementRegistry ----------
 
@@ -254,6 +251,9 @@ ponder.on("WorkUnitManager:WorkSettled", async ({ event, context }) => {
   await context.db
     .update(schema.workUnit, { id: event.args.id })
     .set({ status: 6, settledAt: event.block.timestamp });
+});
+ponder.on("WorkUnitManager:WorkCancelled", async ({ event, context }) => {
+  await context.db.update(schema.workUnit, { id: event.args.id }).set({ status: 7 });
 });
 
 // ---------- ReputationRegistry ----------

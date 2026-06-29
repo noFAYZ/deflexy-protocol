@@ -147,6 +147,19 @@ export const AgreementRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "cancelWorkUnit",
+    "inputs": [
+      {
+        "name": "workUnitId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimApproval",
     "inputs": [
       {
@@ -354,6 +367,11 @@ export const AgreementRegistryAbi = [
             "name": "completedAt",
             "type": "uint64",
             "internalType": "uint64"
+          },
+          {
+            "name": "lastDisputeClearedAt",
+            "type": "uint64",
+            "internalType": "uint64"
           }
         ]
       }
@@ -505,6 +523,11 @@ export const AgreementRegistryAbi = [
         "name": "agreementId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum DisputeOutcome"
       },
       {
         "name": "freelancerAmount",
@@ -881,6 +904,31 @@ export const AgreementRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "WorkUnitCancelled",
+    "inputs": [
+      {
+        "name": "agreementId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "workUnitId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "WorkUnitSettled",
     "inputs": [
       {
@@ -941,12 +989,22 @@ export const AgreementRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidFixedAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "JobNotOpen",
     "inputs": []
   },
   {
     "type": "error",
     "name": "NotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotCancellable",
     "inputs": []
   },
   {

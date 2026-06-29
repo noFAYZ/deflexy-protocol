@@ -3,9 +3,9 @@
 export enum ProfileStatus { None, Active, Archived }
 export enum JobStatus { None, Open, Filled, Completed, Cancelled }
 export enum BidStatus { None, Submitted, Accepted, Withdrawn, Rejected }
-export enum SettlementModel { Fixed, Milestone, Hourly, Subscription }
+export enum SettlementModel { Fixed, Milestone }
 export enum AgreementStatus { None, Active, Disputed, Resolved, Completed, Terminated }
-export enum WorkUnitStatus { None, Created, InProgress, Submitted, RevisionRequested, Approved, Settled }
+export enum WorkUnitStatus { None, Created, InProgress, Submitted, RevisionRequested, Approved, Settled, Cancelled }
 export enum VaultStatus { None, Funded, Exhausted, Refunded }
 export enum DisputeStatus { None, Open, UnderReview, Resolved, Dismissed }
 export enum DisputeOutcome { None, EmployerPrevails, FreelancerPrevails, Split, Terminated }
@@ -19,6 +19,6 @@ export const Capability = {
   FundVault: 1n << 4n,
   SubmitWork: 1n << 5n,
   ApproveWork: 1n << 6n,
-  OpenDispute: 1n << 7n,
-  ManageProfile: 1n << 8n,
+  // OpenDispute / ManageProfile removed: dropped from Capabilities.ALL on-chain,
+  // so granting them now reverts InvalidMask.
 } as const;

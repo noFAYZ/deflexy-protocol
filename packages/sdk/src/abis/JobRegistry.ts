@@ -151,6 +151,19 @@ export const JobRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "markCancelled",
+    "inputs": [
+      {
+        "name": "jobId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "markCompleted",
     "inputs": [
       {
@@ -392,6 +405,11 @@ export const JobRegistryAbi = [
   {
     "type": "error",
     "name": "InvalidToken",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "JobNotFilled",
     "inputs": []
   },
   {

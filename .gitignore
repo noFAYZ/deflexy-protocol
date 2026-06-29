@@ -18,7 +18,7 @@ generated/
 CLAUDE.md
 .mcp.json
 
-lib/
+/lib/
 node_modules
 .ponder
 packages/api/data/

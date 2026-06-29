@@ -19,8 +19,6 @@ const BUDGET_PRESETS = [10, 50, 100, 500];
 const MODEL_META = [
   { icon: "solar:dollar-minimalistic-bold-duotone", desc: "One payment for the whole job." },
   { icon: "solar:checklist-minimalistic-bold-duotone", desc: "Pay in stages as work is approved." },
-  { icon: "solar:clock-circle-bold-duotone", desc: "Pay for time logged." },
-  { icon: "solar:refresh-circle-bold-duotone", desc: "Recurring payments over time." },
 ];
 
 export function CreateJobDialog() {

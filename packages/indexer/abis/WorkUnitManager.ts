@@ -182,6 +182,19 @@ export const WorkUnitManagerAbi = [
   },
   {
     "type": "function",
+    "name": "setCancelled",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setInProgress",
     "inputs": [
       {
@@ -324,6 +337,19 @@ export const WorkUnitManagerAbi = [
   {
     "type": "event",
     "name": "WorkApproved",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WorkCancelled",
     "inputs": [
       {
         "name": "id",
