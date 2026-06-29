@@ -55,12 +55,18 @@ function JobRow({ job, onSelect }: { job: JobItem; onSelect: () => void }) {
       title={brief?.title ?? (MODELS[job.model] ?? String(job.model))}
       timestamp={job.createdAt}
       description={brief?.description}
+      tags={brief?.tags}
       onSelect={onSelect}
       badges={
         <>
           <Badge variant={jobStatusVariant(job.status)} className="shrink-0">
             {JOB_STATUS[job.status]}
           </Badge>
+          {brief?.category && (
+            <Badge variant="subtle" className="shrink-0">
+              {brief.category}
+            </Badge>
+          )}
           <Badge variant="subtle" className="shrink-0">
             {MODELS[job.model] ?? job.model}
           </Badge>

@@ -8,6 +8,17 @@ export const MODELS = [
 
 export type Model = (typeof MODELS)[number];
 
+export const CATEGORIES = [
+  "Development",
+  "Design",
+  "Writing",
+  "Marketing",
+  "Data",
+  "Other",
+] as const;
+
+export type Category = (typeof CATEGORIES)[number];
+
 export const JOB_STATUS = [
   "None",
   "Open",

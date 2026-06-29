@@ -134,8 +134,15 @@ export interface Brief {
   v: 1;
   title: string;
   description: string;
+  category?: string; // single, from CATEGORIES
+  tags?: string[]; // free-form, normalized + capped
   attachments: { ref: Hex; name: string; mime: string }[];
   ts: number;
+}
+
+/** Normalize free-form tags: trim, lowercase, drop blanks, dedupe, cap at 6. */
+export function normalizeTags(tags: string[]): string[] {
+  return [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 6);
 }
 
 /** Coarse phases for upload progress UI. */
@@ -149,6 +156,7 @@ export async function uploadBrief(
   description: string,
   files: File[],
   onPhase?: (p: UploadPhase) => void,
+  meta?: { category?: string; tags?: string[] },
 ): Promise<{ ref: Hex; brief: Brief }> {
   let attachments: Brief["attachments"] = [];
   if (files.length) {
@@ -158,7 +166,16 @@ export async function uploadBrief(
     );
   }
   onPhase?.("brief");
-  const brief: Brief = { v: 1, title, description, attachments, ts: Date.now() };
+  const tags = meta?.tags?.length ? normalizeTags(meta.tags) : undefined;
+  const brief: Brief = {
+    v: 1,
+    title,
+    description,
+    ...(meta?.category ? { category: meta.category } : {}),
+    ...(tags?.length ? { tags } : {}),
+    attachments,
+    ts: Date.now(),
+  };
   const ref = await uploadJson(brief);
   return { ref, brief };
 }
@@ -185,10 +202,13 @@ export function parseBrief(data: unknown): Brief | null {
         .filter((a) => typeof a.ref === "string" && typeof a.name === "string")
         .map((a) => ({ ref: a.ref as Hex, name: a.name as string, mime: typeof a.mime === "string" ? a.mime : "" }))
     : [];
+  const tags = Array.isArray(b.tags) ? normalizeTags(b.tags.filter((t): t is string => typeof t === "string")) : [];
   return {
     v: 1,
     title: b.title,
     description: typeof b.description === "string" ? b.description : "",
+    ...(typeof b.category === "string" && b.category ? { category: b.category } : {}),
+    ...(tags.length ? { tags } : {}),
     attachments,
     ts: typeof b.ts === "number" ? b.ts : 0,
   };
