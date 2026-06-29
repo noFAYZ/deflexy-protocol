@@ -205,6 +205,8 @@ export function createDeflexy(config: DeflexyConfig) {
     approveWork: (workUnitId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "approveWork", [workUnitId]),
     claimApproval: (workUnitId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "claimApproval", [workUnitId]),
     settleWorkUnit: (workUnitId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "settleWorkUnit", [workUnitId]),
+    /** Employer voids a never-approved unit after the approval window — frees its allocation. */
+    cancelWorkUnit: (workUnitId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "cancelWorkUnit", [workUnitId]),
     completeAgreement: (agreementId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "completeAgreement", [agreementId]),
     terminateAgreement: (agreementId: bigint) => send(addr.agreementRegistry, AgreementRegistryAbi, "terminateAgreement", [agreementId]),
 
