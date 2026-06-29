@@ -118,13 +118,14 @@ async function pinPrivate(file: File, ref: Hex, log: Logger = logger): Promise<s
   return res.cid;
 }
 
-async function resolveCid(ref: string): Promise<string | null> {
+async function resolveCid(ref: string, log: Logger = logger): Promise<string | null> {
   if (cidByRef.has(ref)) return cidByRef.get(ref)!;
   // Re-read the persisted map (a backfill or another instance may have added it).
   for (const [k, v] of loadRefs()) if (!cidByRef.has(k)) cidByRef.set(k, v);
   if (cidByRef.has(ref)) return cidByRef.get(ref)!;
   // Last resort: Pinata's keyvalue index (only reliable for files that got tagged).
-  const { files } = await pinata.files.private.list().keyvalues({ ref });
+  const [{ files }, ms] = await timed(() => pinata.files.private.list().keyvalues({ ref }));
+  log.warn({ ref, ms, op: "pinata.files.list" }, `ref missing from cache — Pinata list ${ms}ms`);
   const cid = files?.[0]?.cid ?? null;
   if (cid) {
     cidByRef.set(ref, cid);
@@ -147,18 +148,25 @@ app.post("/upload/json", requireAuth, async (c) => {
   const bytes = new TextEncoder().encode(JSON.stringify(data));
   const ref = keccak256(bytes);
   await pinPrivate(new File([bytes], "data.json", { type: "application/json" }), ref, c.get("log"));
+  // Warm the read cache now: the JSON is content-addressed and immutable, so the
+  // first /brief reader (often a different user) skips the slow cold gateway fetch.
+  briefCache.set(ref, data);
   return c.json({ ref });
 });
 
 // Returns the brief JSON directly (one round trip, no separate gateway fetch) and caches
 // it server-side. Small immutable payload → safe to memoize indefinitely.
 app.post("/brief", requireAuth, async (c) => {
+  const log = c.get("log");
   const { ref } = await c.req.json();
   if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
   if (briefCache.has(ref)) return c.json({ data: briefCache.get(ref) });
-  const cid = await resolveCid(ref);
+  // Cold path (cache miss): two Pinata round-trips. Time each so the slow log
+  // shows whether `resolve` (files.list) or `gateway` (content fetch) dominates.
+  const [cid, resolveMs] = await timed(() => resolveCid(ref, log));
   if (!cid) return c.json({ error: "not found" }, 404);
-  const { data } = await pinata.gateways.private.get(cid); // SDK parses application/json
+  const [{ data }, gatewayMs] = await timed(() => pinata.gateways.private.get(cid)); // SDK parses JSON
+  log.info({ ref, cid, resolveMs, gatewayMs, op: "brief.cold" }, `cold brief: resolve ${resolveMs}ms + gateway ${gatewayMs}ms`);
   briefCache.set(ref, data ?? null);
   return c.json({ data: data ?? null });
 });
@@ -166,7 +174,7 @@ app.post("/brief", requireAuth, async (c) => {
 app.post("/access", requireAuth, async (c) => {
   const { ref, img } = await c.req.json();
   if (typeof ref !== "string") return c.json({ error: "bad ref" }, 400);
-  const cid = await resolveCid(ref);
+  const cid = await resolveCid(ref, c.get("log"));
   if (!cid) return c.json({ error: "not found" }, 404);
   let link = pinata.gateways.private.createAccessLink({ cid, expires: 120 });
   // Optimized thumbnails: Pinata resizes/transcodes server-side, so the browser only
