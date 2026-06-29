@@ -59,6 +59,10 @@ contract AgreementRegistry is Ownable {
         uint32 outstandingUnits; // created but not yet settled
         uint64 createdAt;
         uint64 completedAt;
+        // §D1: timestamp the agreement last returned to ACTIVE from DISPUTED.
+        // Liveness clocks (claimApproval / cancelWorkUnit) resume from here, so a
+        // dispute can't silently burn a party's revision/response window.
+        uint64 lastDisputeClearedAt;
     }
 
     uint256 public agreementCount;
@@ -69,6 +73,7 @@ contract AgreementRegistry is Ownable {
     event AgreementActivated(uint256 indexed agreementId);
     event WorkUnitAdded(uint256 indexed agreementId, uint256 indexed workUnitId, uint256 amount);
     event WorkUnitSettled(uint256 indexed agreementId, uint256 indexed workUnitId, uint256 amount);
+    event WorkUnitCancelled(uint256 indexed agreementId, uint256 indexed workUnitId, uint256 amount);
     event AgreementCompleted(uint256 indexed agreementId);
     event AgreementTerminated(uint256 indexed agreementId);
     event AgreementDisputed(uint256 indexed agreementId);
@@ -95,6 +100,7 @@ contract AgreementRegistry is Ownable {
     error OutstandingUnits();
     error ApprovalWindowNotElapsed();
     error NotSubmitted();
+    error NotCancellable();
     error InvalidDistribution();
     error Paused();
     error NotGuardian();
@@ -243,9 +249,11 @@ contract AgreementRegistry is Ownable {
     /// past the window, so an unresponsive employer can't trap funds.
     function claimApproval(uint256 workUnitId) external {
         IWorkUnitManager.WorkUnit memory u = workUnits.getWorkUnit(workUnitId);
-        _active(u.agreementId);
+        Agreement storage a = _active(u.agreementId);
         if (u.status != WorkUnitStatus.SUBMITTED) revert NotSubmitted();
-        if (block.timestamp < u.submittedAt + APPROVAL_WINDOW) revert ApprovalWindowNotElapsed();
+        // Clock resumes from the later of submission or the last dispute clearing.
+        uint64 since = u.submittedAt > a.lastDisputeClearedAt ? u.submittedAt : a.lastDisputeClearedAt;
+        if (block.timestamp < since + APPROVAL_WINDOW) revert ApprovalWindowNotElapsed();
         workUnits.setApproved(workUnitId);
     }
 
@@ -263,6 +271,34 @@ contract AgreementRegistry is Ownable {
         vault.releasePayment(a.vaultId, profiles.ownerOf(a.freelancerProfileId), u.amount);
         reputation.recordSettlement(u.agreementId, a.employerProfileId, a.freelancerProfileId, u.amount);
         emit WorkUnitSettled(u.agreementId, workUnitId, u.amount);
+    }
+
+    /// @dev §M1 employer liveness escape, symmetric to the freelancer's
+    /// claimApproval: void a unit the freelancer never carried to APPROVED once
+    /// the approval window has elapsed with no pending submission. Frees the
+    /// allocation and outstanding count so the agreement can complete and refund,
+    /// instead of being locked until a dispute. The window protects an actively
+    /// working freelancer — a SUBMITTED unit is not cancellable (it has its own
+    /// claimApproval path), and resubmitting resets the clock via submittedAt.
+    function cancelWorkUnit(uint256 workUnitId) external {
+        IWorkUnitManager.WorkUnit memory u = workUnits.getWorkUnit(workUnitId);
+        Agreement storage a = _active(u.agreementId);
+        _requireEmployer(a, Capabilities.ACCEPT_BID);
+
+        WorkUnitStatus st = u.status;
+        if (
+            st != WorkUnitStatus.CREATED && st != WorkUnitStatus.IN_PROGRESS
+                && st != WorkUnitStatus.REVISION_REQUESTED
+        ) revert NotCancellable();
+
+        uint64 ref = u.submittedAt != 0 ? u.submittedAt : u.createdAt;
+        uint64 since = ref > a.lastDisputeClearedAt ? ref : a.lastDisputeClearedAt; // §D1
+        if (block.timestamp < since + APPROVAL_WINDOW) revert ApprovalWindowNotElapsed();
+
+        workUnits.setCancelled(workUnitId);
+        a.allocated -= u.amount;
+        a.outstandingUnits -= 1;
+        emit WorkUnitCancelled(u.agreementId, workUnitId, u.amount);
     }
 
     // --- closure ---
@@ -285,6 +321,7 @@ contract AgreementRegistry is Ownable {
         _refundRemainder(a);
         a.status = AgreementStatus.TERMINATED;
         a.completedAt = uint64(block.timestamp);
+        jobs.markCancelled(a.jobId); // §L4: don't strand the job in FILLED
         emit AgreementTerminated(agreementId);
     }
 
@@ -311,6 +348,7 @@ contract AgreementRegistry is Ownable {
         Agreement storage a = _agreements[agreementId];
         if (a.status != AgreementStatus.DISPUTED) revert NotDisputed();
         a.status = AgreementStatus.ACTIVE;
+        a.lastDisputeClearedAt = uint64(block.timestamp); // §D1: resume liveness clocks
         emit AgreementDisputeDismissed(agreementId);
     }
 

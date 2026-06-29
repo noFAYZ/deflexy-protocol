@@ -56,7 +56,8 @@ enum WorkUnitStatus {
     SUBMITTED,
     REVISION_REQUESTED,
     APPROVED,
-    SETTLED
+    SETTLED,
+    CANCELLED
 }
 
 enum DisputeStatus {

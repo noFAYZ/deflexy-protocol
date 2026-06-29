@@ -25,6 +25,7 @@ interface IJobRegistry {
     function getJob(uint256 jobId) external view returns (Job memory);
     function markFilled(uint256 jobId) external;
     function markCompleted(uint256 jobId) external;
+    function markCancelled(uint256 jobId) external;
 }
 
 interface IBidRegistry {
@@ -72,6 +73,7 @@ interface IWorkUnitManager {
     function setRevisionRequested(uint256 id) external;
     function setApproved(uint256 id) external;
     function setSettled(uint256 id) external;
+    function setCancelled(uint256 id) external;
     function getWorkUnit(uint256 id) external view returns (WorkUnit memory);
 }
 
@@ -90,6 +92,10 @@ interface IFeeManager {
         external
         view
         returns (uint256 fee, uint256 net, address treasury);
+
+    /// @return feeBps effective fee in bps (0 if disabled), treasury recipient.
+    /// Read once at vault creation so live config changes can't retro-skim escrow.
+    function policy(address token) external view returns (uint16 feeBps, address treasury);
 }
 
 interface IPermissionManager {

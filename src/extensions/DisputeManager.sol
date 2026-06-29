@@ -28,9 +28,15 @@ contract DisputeManager is Ownable {
         uint64 resolvedAt;
     }
 
+    /// @dev §M2 anti-grief: after a dismissal an agreement can't be re-disputed
+    /// until this cooldown passes, so a participant can't perpetually re-open to
+    /// freeze settlement. The arbitrator's resolveDispute is the terminal escape.
+    uint64 public constant REDISPUTE_COOLDOWN = 3 days;
+
     uint256 public disputeCount;
     mapping(uint256 => Dispute) private _disputes;
     mapping(uint256 => uint256) public openDisputeOf; // agreementId => disputeId (current)
+    mapping(uint256 => uint64) public redisputeAllowedAt; // agreementId => earliest re-open
 
     event DisputeOpened(uint256 indexed disputeId, uint256 indexed agreementId, address indexed initiator);
     event EvidenceSubmitted(uint256 indexed disputeId, address indexed by, bytes32 evidenceCID);
@@ -45,6 +51,7 @@ contract DisputeManager is Ownable {
     error DisputeNotFound();
     error InvalidState();
     error InvalidOutcome();
+    error RedisputeCooldown();
 
     constructor(address arbitrator, address agreementRegistry, address profileRegistry) Ownable(arbitrator) {
         agreements = IAgreementRegistry(agreementRegistry);
@@ -59,6 +66,7 @@ contract DisputeManager is Ownable {
         if (msg.sender != profiles.ownerOf(emp) && msg.sender != profiles.ownerOf(free)) {
             revert NotParticipant();
         }
+        if (block.timestamp < redisputeAllowedAt[agreementId]) revert RedisputeCooldown();
 
         id = ++disputeCount;
         Dispute storage d = _disputes[id];
@@ -124,6 +132,7 @@ contract DisputeManager is Ownable {
         d.resolutionCID = resolutionCID;
         d.resolvedAt = uint64(block.timestamp);
         openDisputeOf[d.agreementId] = 0;
+        redisputeAllowedAt[d.agreementId] = uint64(block.timestamp) + REDISPUTE_COOLDOWN; // §M2
 
         agreements.markDismissed(d.agreementId); // returns agreement to ACTIVE
         emit DisputeDismissed(disputeId);

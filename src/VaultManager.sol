@@ -19,6 +19,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    /// @dev Hard ceiling mirrored from the FeeManager — a snapshot can never
+    /// exceed this even if the policy is later misconfigured.
+    uint256 internal constant MAX_FEE_BPS = 1000;
+    uint256 internal constant BPS_DENOMINATOR = 10_000;
+
     struct Vault {
         uint256 agreementId;
         address token;
@@ -26,6 +31,10 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
         uint256 released;
         uint256 refunded;
         VaultStatus status;
+        // Fee policy SNAPSHOT taken at creation (§M3). Settlements split against
+        // these, so a later setFeeConfig can't retroactively skim live escrow.
+        uint16 feeBps;
+        address treasury;
     }
 
     uint256 public vaultCount;
@@ -33,6 +42,10 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
     mapping(address => bool) public allowedToken;
     // recipient => token => claimable amount (pull payments)
     mapping(address => mapping(address => uint256)) public claimable;
+    // token => total obligations the contract must hold (escrow + claimables).
+    // Rises only on deposit, falls only on withdraw; balance above it is donated
+    // dust that no vault accounts for and can be swept without touching user funds.
+    mapping(address => uint256) public owed;
 
     /// @dev Optional fee policy. Zero = no protocol fee. Set once (§3-style
     /// immutability) so it can't be swapped to skim live escrow.
@@ -46,6 +59,7 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
     event FeeCollected(uint256 indexed vaultId, address indexed treasury, uint256 amount);
     event RefundIssued(uint256 indexed vaultId, address indexed recipient, uint256 amount);
     event Withdrawal(address indexed recipient, address indexed token, uint256 amount);
+    event ExcessSwept(address indexed token, address indexed to, uint256 amount);
 
     error TokenNotAllowed();
     error VaultNotFound();
@@ -53,6 +67,7 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
     error InvalidAmount();
     error InsufficientBalance();
     error NothingToWithdraw();
+    error NothingToSweep();
     error AlreadySet();
 
     constructor(address owner_) Ownable(owner_) {}
@@ -83,7 +98,17 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
     {
         if (!allowedToken[token]) revert TokenNotAllowed();
         vaultId = ++vaultCount;
-        _vaults[vaultId] = Vault(agreementId, token, 0, 0, 0, VaultStatus.NONE);
+
+        // Snapshot the fee policy now; settlement uses this, never live config.
+        uint16 bps;
+        address treasury;
+        IFeeManager fm = feeManager;
+        if (address(fm) != address(0)) {
+            (bps, treasury) = fm.policy(token);
+            if (bps > MAX_FEE_BPS) bps = uint16(MAX_FEE_BPS); // defensive clamp
+        }
+
+        _vaults[vaultId] = Vault(agreementId, token, 0, 0, 0, VaultStatus.NONE, bps, treasury);
         emit VaultCreated(vaultId, agreementId, token);
     }
 
@@ -106,6 +131,7 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
         if (received == 0) revert InvalidAmount();
 
         v.deposited += received;
+        owed[v.token] += received;
         v.status = VaultStatus.FUNDED;
         emit FundsDeposited(vaultId, received);
     }
@@ -125,7 +151,7 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
         v.released += amount; // gross accounting
         if (_available(v) == 0) v.status = VaultStatus.EXHAUSTED;
 
-        (uint256 fee, uint256 net, address treasury) = _split(v.token, amount);
+        (uint256 fee, uint256 net, address treasury) = _split(v, amount);
         claimable[recipient][v.token] += net;
         if (fee > 0) {
             claimable[treasury][v.token] += fee;
@@ -152,8 +178,22 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
         uint256 amount = claimable[msg.sender][token];
         if (amount == 0) revert NothingToWithdraw();
         claimable[msg.sender][token] = 0; // effects before interaction
+        owed[token] -= amount;
         IERC20(token).safeTransfer(msg.sender, amount);
         emit Withdrawal(msg.sender, token, amount);
+    }
+
+    /// @dev Sweep tokens the contract holds beyond its obligations — i.e. direct
+    /// donations that no vault accounts for. Can never touch escrow or pending
+    /// claimables, since `owed` reserves every cent the protocol owes.
+    function sweep(address token, address to) external onlyOwner nonReentrant {
+        if (to == address(0)) revert ZeroAddress();
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        uint256 reserved = owed[token];
+        if (bal <= reserved) revert NothingToSweep();
+        uint256 excess = bal - reserved;
+        IERC20(token).safeTransfer(to, excess);
+        emit ExcessSwept(token, to, excess);
     }
 
     // --- views ---
@@ -174,20 +214,20 @@ contract VaultManager is IVaultManager, Wired, ReentrancyGuard {
         return v.deposited - v.released - v.refunded;
     }
 
-    /// @dev Fee split. Defensive: fee can never exceed amount and a positive fee
-    /// must have a non-zero treasury, so a misconfigured FeeManager can't burn
-    /// funds or skim more than allowed.
-    function _split(address token, uint256 amount)
+    /// @dev Fee split from the vault's CREATION-TIME snapshot (not live config).
+    /// Defensive: a zero treasury or out-of-range bps degrades to no fee, so a
+    /// snapshot can never burn funds or skim more than the ceiling.
+    function _split(Vault storage v, uint256 amount)
         private
         view
         returns (uint256 fee, uint256 net, address treasury)
     {
-        IFeeManager fm = feeManager;
-        if (address(fm) == address(0)) return (0, amount, address(0));
-        (fee, net, treasury) = fm.quote(token, amount);
-        if (fee > amount || fee + net != amount || (fee > 0 && treasury == address(0))) {
-            // Misbehaving policy → ignore the fee rather than trust it.
+        uint256 bps = v.feeBps;
+        treasury = v.treasury;
+        if (bps == 0 || bps > MAX_FEE_BPS || treasury == address(0)) {
             return (0, amount, address(0));
         }
+        fee = (amount * bps) / BPS_DENOMINATOR; // <= 10% since bps <= MAX_FEE_BPS
+        net = amount - fee;
     }
 }
