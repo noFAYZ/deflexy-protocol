@@ -10,7 +10,7 @@ import { ReputationRegistryAbi } from "./abis/ReputationRegistry";
 import { DisputeManagerAbi } from "./abis/DisputeManager";
 
 const chain = "baseSepolia" as const;
-const startBlock = 43_394_360; // just before the deployment txs
+const startBlock = 43_475_600; // just before the deployment txs (block 43_475_604)
 
 export default createConfig({
   chains: {
@@ -27,49 +27,49 @@ export default createConfig({
     ProfileRegistry: {
       chain,
       abi: ProfileRegistryAbi,
-      address: "0x354fb8da7d5475b17e4d5a234b0d697bff68a0dd",
+      address: "0xf72e686f93AbFF7e39A0533211abE470bC71b3C8",
       startBlock,
     },
     JobRegistry: {
       chain,
       abi: JobRegistryAbi,
-      address: "0x3f5093e4ff021da840d8278ee3780a09b7bdb81f",
+      address: "0x10cC66641B6A08827E967889Ad4c3B12De175474",
       startBlock,
     },
     BidRegistry: {
       chain,
       abi: BidRegistryAbi,
-      address: "0x043dc3649c51245f8e085315cd7f7273f608565e",
+      address: "0xc213d08867c7e49110BB3265Cbaeceb5da1DD8B8",
       startBlock,
     },
     AgreementRegistry: {
       chain,
       abi: AgreementRegistryAbi,
-      address: "0x81dF5CB950308a01C07240c7c4e267a0eE70DC70",
+      address: "0x4b3291459B354B1988759f52A693c59F91334d7F",
       startBlock,
     },
     VaultManager: {
       chain,
       abi: VaultManagerAbi,
-      address: "0xa44B1B44bC4f0f5F5BB823E1540c1C14aC3aAD1e",
+      address: "0xE0524a20cC0c6Aa96eC66Ebae15e49B9Af9D72cE",
       startBlock,
     },
     WorkUnitManager: {
       chain,
       abi: WorkUnitManagerAbi,
-      address: "0x0eea19241a6e6627304d708eb355bc81889479c2",
+      address: "0x88321Fee43B75edc032e7A7d0bF16d10bB8dC244",
       startBlock,
     },
     ReputationRegistry: {
       chain,
       abi: ReputationRegistryAbi,
-      address: "0x2a0777a42c42f714594a0f4e813fc2c0f9ef541e",
+      address: "0xb1fDAD433E505EBb7361Dea7DeB2c2BF15A1E79b",
       startBlock,
     },
     DisputeManager: {
       chain,
       abi: DisputeManagerAbi,
-      address: "0x5F23741C354b506C25D405598cF45cCb2BDba9d1",
+      address: "0x6cBAB889E6ad3e1f9E4631DF848E928aD41b9cFb",
       startBlock,
     },
   },

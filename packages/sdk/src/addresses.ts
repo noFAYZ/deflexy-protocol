@@ -14,17 +14,17 @@ export interface DeflexyAddresses {
   permissionManager: Address;
 }
 
-/** Deflexy v1 — Base Sepolia (chain 84532). */
+/** Deflexy v1 — Base Sepolia (chain 84532). Redeployed with the hardened contracts. */
 export const baseSepoliaAddresses: DeflexyAddresses = {
-  registry: "0xBb51cd620a5328c8c30491686385B74a2d859f99",
-  profileRegistry: "0x354fb8da7d5475b17e4d5a234b0d697bff68a0dd",
-  jobRegistry: "0x3f5093e4ff021da840d8278ee3780a09b7bdb81f",
-  bidRegistry: "0x043dc3649c51245f8e085315cd7f7273f608565e",
-  agreementRegistry: "0x81dF5CB950308a01C07240c7c4e267a0eE70DC70",
-  vaultManager: "0xa44B1B44bC4f0f5F5BB823E1540c1C14aC3aAD1e",
-  workUnitManager: "0x0eea19241a6e6627304d708eb355bc81889479c2",
-  reputationRegistry: "0x2a0777a42c42f714594a0f4e813fc2c0f9ef541e",
-  feeManager: "0xe54D35e7c0C15AD23BA5ec190c98E0dd8AEfF831",
-  disputeManager: "0x5F23741C354b506C25D405598cF45cCb2BDba9d1",
-  permissionManager: "0xBAd70c60bF10a2893F95f561886E3660a1d06F52",
+  registry: "0x1B9c1da59224A96cEAAb1609a3c703E2b9Ec801c",
+  profileRegistry: "0xf72e686f93AbFF7e39A0533211abE470bC71b3C8",
+  jobRegistry: "0x10cC66641B6A08827E967889Ad4c3B12De175474",
+  bidRegistry: "0xc213d08867c7e49110BB3265Cbaeceb5da1DD8B8",
+  agreementRegistry: "0x4b3291459B354B1988759f52A693c59F91334d7F",
+  vaultManager: "0xE0524a20cC0c6Aa96eC66Ebae15e49B9Af9D72cE",
+  workUnitManager: "0x88321Fee43B75edc032e7A7d0bF16d10bB8dC244",
+  reputationRegistry: "0xb1fDAD433E505EBb7361Dea7DeB2c2BF15A1E79b",
+  feeManager: "0xD4C4BEc9c82e9CE59eAB1867ef8aCF3028F912dd",
+  disputeManager: "0x6cBAB889E6ad3e1f9E4631DF848E928aD41b9cFb",
+  permissionManager: "0x4489b648682A396068875a8Cda636286bC864098",
 };
