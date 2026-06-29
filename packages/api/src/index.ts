@@ -61,6 +61,7 @@ export function loginMessage(address: string, issued: number, nonce: string) {
 
 const SESSION_TTL = 60 * 60 * 24; // 1 day
 const SIGN_WINDOW = 5 * 60 * 1000; // signed message must be < 5 min old
+const MAX_UPLOAD = 25 * 1024 * 1024; // 25 MB cap on direct (signed-url) uploads
 
 const app = new Hono<AppEnv>();
 app.use("/*", requestLogger()); // first: time + tag every request
@@ -140,6 +141,40 @@ app.post("/upload/file", requireAuth, async (c) => {
   if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
   const ref = keccak256(new Uint8Array(await file.arrayBuffer()));
   await pinPrivate(file, ref, c.get("log"));
+  return c.json({ ref });
+});
+
+// --- direct browser->Pinata uploads (signed URLs) -----------------------------
+// Bytes skip this server entirely: the client computes ref = keccak256(content),
+// asks us to mint a short-lived signed URL, uploads straight to Pinata, then
+// registers the resulting cid. Halves transfer for large files and keeps file
+// bytes off our bandwidth. (Tiny JSON briefs stay on /upload/json — no transfer
+// win there, and they need server-side cache warming + a trustworthy ref.)
+app.post("/upload/sign", requireAuth, async (c) => {
+  const { ref } = await c.req.json();
+  if (typeof ref !== "string" || !ref.startsWith("0x")) return c.json({ error: "bad ref" }, 400);
+  const cached = cidByRef.get(ref);
+  if (cached) return c.json({ cid: cached }); // already pinned — client skips the upload
+  // keyvalues={ref} keeps the resolveCid list-fallback working for direct uploads.
+  const [url, ms] = await timed(() =>
+    pinata.upload.private.createSignedURL({ expires: 60, keyvalues: { ref }, maxFileSize: MAX_UPLOAD }),
+  );
+  c.get("log").info({ ref, ms, op: "pinata.signedUrl" }, `signed upload url in ${ms}ms`);
+  return c.json({ url });
+});
+
+app.post("/upload/commit", requireAuth, async (c) => {
+  const { ref, cid } = await c.req.json();
+  if (typeof ref !== "string" || typeof cid !== "string") return c.json({ error: "bad input" }, 400);
+  // First-writer-wins. Refs are content hashes, so overwriting a known mapping
+  // would only matter to someone who already holds that exact content.
+  // ponytail: we trust the authenticated client's cid<->ref pairing; re-hash the
+  // fetched content to verify if this ever gates anything valuable.
+  if (!cidByRef.has(ref)) {
+    cidByRef.set(ref, cid);
+    persistRefs();
+    c.get("log").info({ ref, cid, op: "upload.commit" }, "registered direct upload");
+  }
   return c.json({ ref });
 });
 

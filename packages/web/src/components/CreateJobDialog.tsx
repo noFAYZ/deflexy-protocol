@@ -97,20 +97,16 @@ export function CreateJobDialog() {
   return (
     <>
       <Button className="w-full" disabled={!hasProfile} onClick={() => openSheet(true)}>
-        <Icon icon="solar:add-circle-outline" className="size-5" /> Create Job
+        <Icon icon="solar:add-circle-outline" className="size-5" /> Post Job
       </Button>
 
       <Sheet open={open} onOpenChange={openSheet} >
-        <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Icon icon="solar:case-minimalistic-bold-duotone" className="text-primary size-5" /> Post a job
-            </SheetTitle>
-            <SheetDescription>Funds are escrowed in USDC and released as work is approved.</SheetDescription>
-          </SheetHeader>
 
-          {/* Stepper */}
-<div className="mt-6 mx-auto w-full max-w-xs">
+        
+        <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-2xl">
+          <SheetHeader>
+                {/* Stepper */}
+<div className="  mx-auto w-full max-w-[16rem]">
   <div className="relative flex items-start">
     {STEPS.map((label, i) => {
       const done = i < step;
@@ -185,8 +181,12 @@ export function CreateJobDialog() {
     })}
   </div>
 </div>
+ 
+          </SheetHeader>
 
-          <form onSubmit={onSubmit} className="mt-5 flex flex-1 flex-col">
+
+
+          <form onSubmit={onSubmit} className="mt-12 flex flex-1 flex-col">
             <div className="flex-1 space-y-4">
               {/* Step 1 — details */}
               {step === 0 && (
@@ -314,7 +314,13 @@ export function CreateJobDialog() {
                 </Button>
               )}
               <Button type="submit" className="flex-1" disabled={!stepValid} loading={tx.busy || uploading}>
-                {step < STEPS.length - 1 ? "Continue" : uploading ? "Uploading brief…" : "Create Job"}
+                {step < STEPS.length - 1
+                  ? "Continue"
+                  : uploading
+                    ? "Uploading brief…"
+                    : tx.busy
+                      ? "Creating job…"
+                      : "Create Job"}
               </Button>
             </div>
           </form>

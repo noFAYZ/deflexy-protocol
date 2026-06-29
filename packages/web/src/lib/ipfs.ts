@@ -1,4 +1,4 @@
-import { type Hex } from "viem";
+import { keccak256, type Hex } from "viem";
 import { API_URL as API, ping } from "./health";
 
 // Briefs/attachments live in PRIVATE Pinata storage — never on public IPFS. The backend
@@ -89,10 +89,35 @@ async function authed<T>(path: string, body: BodyInit, headers: Record<string, s
   throw new Error("Authentication failed");
 }
 
-export async function uploadFile(file: File): Promise<Hex> {
+const JSON_HEADERS = { "content-type": "application/json" };
+
+/** Direct browser->Pinata upload via a server-minted signed URL: the file bytes
+ * never touch our backend. Throws on any hiccup so uploadFile can fall back. */
+async function directUploadFile(file: File, ref: Hex): Promise<Hex> {
+  const sign = await authed<{ url?: string; cid?: string }>("/upload/sign", JSON.stringify({ ref }), JSON_HEADERS);
+  if (sign.cid) return ref; // server already had this content pinned
+  if (!sign.url) throw new Error("no signed url");
   const form = new FormData();
   form.append("file", file);
-  return (await authed<{ ref: Hex }>("/upload/file", form)).ref;
+  const res = await fetch(sign.url, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`pinata upload ${res.status}`);
+  const json = (await res.json()) as { data?: { cid?: string }; cid?: string };
+  const cid = json.data?.cid ?? json.cid;
+  if (!cid) throw new Error("no cid in upload response");
+  await authed("/upload/commit", JSON.stringify({ ref, cid }), JSON_HEADERS);
+  return ref;
+}
+
+export async function uploadFile(file: File): Promise<Hex> {
+  const ref = keccak256(new Uint8Array(await file.arrayBuffer()));
+  try {
+    return await directUploadFile(file, ref);
+  } catch {
+    // Signed-url path unavailable (CORS, network, older backend) → server proxy.
+    const form = new FormData();
+    form.append("file", file);
+    return (await authed<{ ref: Hex }>("/upload/file", form)).ref;
+  }
 }
 
 export async function uploadJson(data: unknown): Promise<Hex> {
