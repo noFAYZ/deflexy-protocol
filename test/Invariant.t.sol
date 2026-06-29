@@ -128,7 +128,7 @@ contract InvariantTest is Base {
         fee.setFeeConfig(address(token), 250, treasury, true);
 
         vm.prank(employer);
-        uint256 jobId = jobs.createJob(empProfile, address(token), total, SettlementModel.FIXED, CID);
+        uint256 jobId = jobs.createJob(empProfile, address(token), total, SettlementModel.MILESTONE, CID);
         vm.prank(freelancer);
         uint256 bidId = bidsC.submitBid(jobId, freeProfile, total, 0, CID);
         vm.prank(employer);

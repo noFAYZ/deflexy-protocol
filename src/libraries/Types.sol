@@ -27,10 +27,12 @@ enum BidStatus {
 }
 
 enum SettlementModel {
-    FIXED,
-    MILESTONE,
-    HOURLY,
-    SUBSCRIPTION
+    FIXED, // single deliverable for the full agreed amount
+    MILESTONE // multiple partial work units summing to the agreed amount
+    // HOURLY / SUBSCRIPTION removed: time-streamed billing isn't implemented and
+    // a stored-but-unenforced model is worse than no model. Re-add with real
+    // settlement logic, not as a label.
+
 }
 
 enum AgreementStatus {

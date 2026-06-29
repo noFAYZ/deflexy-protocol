@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {JobStatus, BidStatus, SettlementModel, WorkUnitStatus, AgreementStatus} from "../libraries/Types.sol";
+import {JobStatus, BidStatus, SettlementModel, WorkUnitStatus, AgreementStatus, DisputeOutcome} from "../libraries/Types.sol";
 
 // ponytail: one file for all module interfaces. Split into per-file interfaces
 // when external integrators need to import them individually.
@@ -41,7 +41,6 @@ interface IBidRegistry {
 
     function getBid(uint256 bidId) external view returns (Bid memory);
     function markAccepted(uint256 bidId) external;
-    function markRejected(uint256 bidId) external;
 }
 
 interface IVaultManager {
@@ -84,6 +83,12 @@ interface IReputationRegistry {
         uint256 freelancerProfileId,
         uint256 amount
     ) external;
+    function recordDispute(
+        uint256 agreementId,
+        uint256 employerProfileId,
+        uint256 freelancerProfileId,
+        DisputeOutcome outcome
+    ) external;
 }
 
 interface IFeeManager {
@@ -113,5 +118,10 @@ interface IAgreementRegistry {
         returns (uint256 employerProfileId, uint256 freelancerProfileId, AgreementStatus status);
     function markDisputed(uint256 agreementId) external;
     function markDismissed(uint256 agreementId) external;
-    function resolveDispute(uint256 agreementId, uint256 freelancerAmount, uint256 employerRefund) external;
+    function resolveDispute(
+        uint256 agreementId,
+        DisputeOutcome outcome,
+        uint256 freelancerAmount,
+        uint256 employerRefund
+    ) external;
 }
